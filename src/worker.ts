@@ -13,7 +13,7 @@ declare type Env = {
   ASSETS: any;
   FINNHUB_API_KEY?: string;
   RESEND_API_KEY?: string;
-  MY_EMAIL_ADDRESS?: string;
+  MY_GMAIL_ADDRESS?: string;
 };
 
 
@@ -37,8 +37,8 @@ export default {
       const resend = new Resend(env.RESEND_API_KEY);
       const { data, error } = await resend.emails.send({
         from: 'onboarding@resend.dev',
-        to: env.MY_EMAIL_ADDRESS as string,
-        subject: 'Stock Analysis Cron Job',
+        to: env.MY_GMAIL_ADDRESS as string,
+        subject: 'Cron Job',
         text: 'Cron job executed successfully at ' + new Date().toISOString(),
       });
 
@@ -63,12 +63,13 @@ export default {
       switch (path) {
 
         case '/send_email':
+          console.log(env.MY_GMAIL_ADDRESS as string);
           const resend = new Resend(env.RESEND_API_KEY);
           const { data } = await resend.emails.send({
             from: 'onboarding@resend.dev',
-            to: env.MY_EMAIL_ADDRESS as string,
-            subject: 'hello world',
-            text: 'it works!',
+            to: env.MY_GMAIL_ADDRESS as string,
+            subject: 'API requested mail',
+            text: 'This mail is sent by the API request from the user',
           });
           
           if (data) {
