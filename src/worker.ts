@@ -14,6 +14,7 @@ declare type Env = {
   FINNHUB_API_KEY?: string;
   RESEND_API_KEY?: string;
   MY_GMAIL_ADDRESS?: string;
+  ENVIRONMENT?: string; 
 };
 
 
@@ -39,7 +40,7 @@ export default {
         from: 'onboarding@resend.dev',
         to: env.MY_GMAIL_ADDRESS as string,
         subject: 'Cron Job',
-        text: 'Cron job executed successfully at ' + new Date().toISOString(),
+        text: 'Cron job executed successfully at ' + new Date().toISOString() + ' in ' + env.ENVIRONMENT,
       });
 
       if (error) {
@@ -69,7 +70,7 @@ export default {
             from: 'onboarding@resend.dev',
             to: env.MY_GMAIL_ADDRESS as string,
             subject: 'API requested mail',
-            text: 'This mail is sent by the API request from the user',
+            text: 'This mail is sent by the API request from the user in ' + env.ENVIRONMENT,
           });
           
           if (data) {
@@ -95,9 +96,9 @@ export default {
             const resend = new Resend(env.RESEND_API_KEY);
             const { data, error } = await resend.emails.send({
               from: 'onboarding@resend.dev',
-              to: env.MY_EMAIL_ADDRESS as string,
+              to: env.MY_GMAIL_ADDRESS as string,
               subject: 'Manual Cron Test',
-              text: 'Manual cron test executed at ' + new Date().toISOString(),
+              text: 'Manual cron test executed at ' + new Date().toISOString() + ' in ' + env.ENVIRONMENT,
             });
 
             if (error) {

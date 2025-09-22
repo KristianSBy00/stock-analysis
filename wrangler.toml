@@ -13,4 +13,4 @@ name = "stock-analysis-app-prod"
 name = "stock-analysis-app-staging"
 
 [triggers]
-crons = ["0 16 * * *"]
+crons = ["0 9 * * *"]
