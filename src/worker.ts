@@ -5,6 +5,7 @@
 
 import yahooFinance from 'yahoo-finance2';
 import { FinnhubClient } from './finnhubClient';
+import { ApiNinjasClient } from './apiNinjasClient';
 import { Resend } from 'resend';
 
 declare type ExecutionContext = any;
@@ -12,6 +13,7 @@ declare type ScheduledController = any;
 declare type Env = {
   ASSETS: any;
   FINNHUB_API_KEY?: string;
+  API_NINJAS_API_KEY?: string;
   RESEND_API_KEY?: string;
   MY_GMAIL_ADDRESS?: string;
   ENVIRONMENT?: string; 
@@ -221,6 +223,26 @@ export default {
             const toParam = url.searchParams.get('to');
             const fromParam = url.searchParams.get('from');
             return await getFinnhubInsiderTransactions(symbol, env, { from: fromParam, to: toParam });
+          }
+          break;
+
+        case '/api/api-ninjas/sp500':
+          if (method === 'GET') {
+            return await getApiNinjasSp500(env);
+          }
+          break;
+
+        case '/api/api-ninjas/quote':
+          if (method === 'GET') {
+            const symbol = url.searchParams.get('symbol') || 'AAPL';
+            return await getApiNinjasQuote(symbol, env);
+          }
+          break;
+
+        case '/api/api-ninjas/profile':
+          if (method === 'GET') {
+            const symbol = url.searchParams.get('symbol') || 'AAPL';
+            return await getApiNinjasProfile(symbol, env);
           }
           break;
 
@@ -513,6 +535,114 @@ async function getFinnhubInsiderTransactions(
     });
   } catch (error) {
     const errorResponse = FinnhubClient.createErrorResponse(error, 'fetch insider transactions', symbol);
+    
+    return new Response(JSON.stringify(errorResponse), {
+      status: errorResponse.status,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+}
+
+/**
+ * Get S&P 500 companies from API Ninjas
+ */
+async function getApiNinjasSp500(env: { API_NINJAS_API_KEY?: string }): Promise<Response> {
+  try {
+    if (!env.API_NINJAS_API_KEY) {
+      return new Response(JSON.stringify({
+        error: 'Missing configuration',
+        message: 'API_NINJAS_API_KEY is not set. Add it via `wrangler secret put API_NINJAS_API_KEY`.'
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const apiNinjasClient = new ApiNinjasClient(env.API_NINJAS_API_KEY);
+    const sp500Data = await apiNinjasClient.getSp500();
+
+    return new Response(JSON.stringify({
+      source: 'API Ninjas',
+      count: sp500Data.count,
+      data: sp500Data.data
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  } catch (error) {
+    const errorResponse = ApiNinjasClient.createErrorResponse(error, 'fetch S&P 500 data');
+    
+    return new Response(JSON.stringify(errorResponse), {
+      status: errorResponse.status,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+}
+
+/**
+ * Get stock quote from API Ninjas
+ */
+async function getApiNinjasQuote(symbol: string, env: { API_NINJAS_API_KEY?: string }): Promise<Response> {
+  try {
+    if (!env.API_NINJAS_API_KEY) {
+      return new Response(JSON.stringify({
+        error: 'Missing configuration',
+        message: 'API_NINJAS_API_KEY is not set. Add it via `wrangler secret put API_NINJAS_API_KEY`.'
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const apiNinjasClient = new ApiNinjasClient(env.API_NINJAS_API_KEY);
+    const quoteData = await apiNinjasClient.getQuote(symbol);
+
+    return new Response(JSON.stringify({
+      symbol: symbol.toUpperCase(),
+      source: 'API Ninjas',
+      ...quoteData
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  } catch (error) {
+    const errorResponse = ApiNinjasClient.createErrorResponse(error, 'fetch quote', symbol);
+    
+    return new Response(JSON.stringify(errorResponse), {
+      status: errorResponse.status,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+}
+
+/**
+ * Get company profile from API Ninjas
+ */
+async function getApiNinjasProfile(symbol: string, env: { API_NINJAS_API_KEY?: string }): Promise<Response> {
+  try {
+    if (!env.API_NINJAS_API_KEY) {
+      return new Response(JSON.stringify({
+        error: 'Missing configuration',
+        message: 'API_NINJAS_API_KEY is not set. Add it via `wrangler secret put API_NINJAS_API_KEY`.'
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const apiNinjasClient = new ApiNinjasClient(env.API_NINJAS_API_KEY);
+    const profileData = await apiNinjasClient.getCompanyProfile(symbol);
+
+    return new Response(JSON.stringify({
+      symbol: symbol.toUpperCase(),
+      source: 'API Ninjas',
+      ...profileData
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  } catch (error) {
+    const errorResponse = ApiNinjasClient.createErrorResponse(error, 'fetch company profile', symbol);
     
     return new Response(JSON.stringify(errorResponse), {
       status: errorResponse.status,
