@@ -3,52 +3,14 @@
  * Provides timeout protection and consistent error handling for all Finnhub endpoints
  */
 
-export interface FinnhubQuote {
-  c?: number; // current price
-  d?: number; // change
-  dp?: number; // percent change
-  h?: number; // high
-  l?: number; // low
-  o?: number; // open
-  pc?: number; // previous close
-  t?: number; // timestamp
-}
-
-export interface FinnhubNewsItem {
-  category?: string;
-  datetime?: number;
-  headline?: string;
-  id?: number;
-  image?: string;
-  related?: string;
-  source?: string;
-  summary?: string;
-  url?: string;
-}
-
-export interface FinnhubInsiderTransaction {
-  symbol?: string;
-  name?: string;
-  share?: number;
-  change?: number;
-  filer?: string;
-  filingDate?: string; // YYYY-MM-DD
-  transactionDate?: string; // YYYY-MM-DD
-  transactionCode?: string; // e.g., P (Purchase), S (Sale)
-  transactionPrice?: number;
-  total?: number; // total value
-  type?: string; // Officer/Director
-}
-
-export interface FinnhubInsiderTransactionsResponse {
-  symbol?: string;
-  data?: FinnhubInsiderTransaction[];
-}
-
-export interface DateRange {
-  from?: string | null;
-  to?: string | null;
-}
+import { 
+  FinnhubQuote, 
+  FinnhubNewsItem, 
+  FinnhubInsiderTransaction, 
+  FinnhubInsiderTransactionsResponse, 
+  DateRange,
+  ApiErrorResponse 
+} from './types';
 
 export class FinnhubClient {
   private readonly apiKey: string;

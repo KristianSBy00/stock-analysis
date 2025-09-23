@@ -7,17 +7,11 @@ import yahooFinance from 'yahoo-finance2';
 import { FinnhubClient } from './finnhubClient';
 import { ApiNinjasClient } from './apiNinjasClient';
 import { Resend } from 'resend';
+import { StockAnalysisDB } from './stockAnalasysDB';
+import { Env } from './types';
 
 declare type ExecutionContext = any;
 declare type ScheduledController = any;
-declare type Env = {
-  ASSETS: any;
-  FINNHUB_API_KEY?: string;
-  API_NINJAS_API_KEY?: string;
-  RESEND_API_KEY?: string;
-  MY_GMAIL_ADDRESS?: string;
-  ENVIRONMENT?: string; 
-};
 
 
 
@@ -228,7 +222,15 @@ export default {
 
         case '/api/api-ninjas/sp500':
           if (method === 'GET') {
-            return await getApiNinjasSp500(env);
+            
+            const response = await getApiNinjasSp500(env);
+            const data = await response.json();
+            const stockAnalysisDB = new StockAnalysisDB(env.API_NINJAS_API_KEY!);
+            await stockAnalysisDB.storeSp500Tickers(env, data, true);
+            return new Response(JSON.stringify(data), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders }
+            });
           }
           break;
 

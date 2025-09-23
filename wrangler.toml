@@ -14,3 +14,8 @@ name = "stock-analysis-app-staging"
 
 [triggers]
 crons = ["0 9 * * *"]
+
+[[d1_databases]]
+binding = "stock_analysis"
+database_name = "stock-analysis"
+database_id = "e7c168d3-ea16-411f-a0ff-69fcffabf472"

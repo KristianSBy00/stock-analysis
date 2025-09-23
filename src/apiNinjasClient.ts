@@ -3,63 +3,14 @@
  * Provides timeout protection and consistent error handling for all API Ninjas endpoints
  */
 
-export interface ApiNinjasSp500Item {
-  ticker?: string;
-  name?: string;
-  sector?: string;
-  industry?: string;
-  market_cap?: number;
-  price?: number;
-  change?: number;
-  change_percent?: number;
-  volume?: number;
-  last_updated?: string;
-}
-
-export interface ApiNinjasSp500Response {
-  data?: ApiNinjasSp500Item[];
-  count?: number;
-}
-
-export interface ApiNinjasStockQuote {
-  symbol?: string;
-  name?: string;
-  price?: number;
-  change?: number;
-  change_percent?: number;
-  volume?: number;
-  market_cap?: number;
-  sector?: string;
-  industry?: string;
-  last_updated?: string;
-}
-
-export interface ApiNinjasCompanyProfile {
-  symbol?: string;
-  name?: string;
-  country?: string;
-  industry?: string;
-  sector?: string;
-  market_cap?: number;
-  employees?: number;
-  website?: string;
-  description?: string;
-  ceo?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
-  phone?: string;
-  fax?: string;
-  logo?: string;
-  exchange?: string;
-  currency?: string;
-}
-
-export interface DateRange {
-  from?: string | null;
-  to?: string | null;
-}
+import { 
+  ApiNinjasSp500Item, 
+  ApiNinjasSp500Response, 
+  ApiNinjasStockQuote, 
+  ApiNinjasCompanyProfile, 
+  DateRange,
+  ApiErrorResponse 
+} from './types';
 
 export class ApiNinjasClient {
   private readonly apiKey: string;
