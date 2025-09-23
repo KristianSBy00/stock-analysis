@@ -11,13 +11,13 @@ declare global {
    interface D1Database {
       prepare(query: string): D1PreparedStatement;
    }
-   
+
    interface D1PreparedStatement {
       bind(...values: any[]): D1PreparedStatement;
       run(): Promise<D1Result>;
       all(): Promise<D1Result>;
    }
-   
+
    interface D1Result {
       results: any[];
       success: boolean;
@@ -33,7 +33,7 @@ export interface InsiderTransaction {
 }
 
 export interface Env {
-   stock_analysis: D1Database;  
+   stock_analysis: D1Database;
    ASSETS?: any;
    FINNHUB_API_KEY?: string;
    API_NINJAS_API_KEY?: string;

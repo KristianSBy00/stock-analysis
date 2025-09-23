@@ -3,13 +3,13 @@
  * Provides timeout protection and consistent error handling for all API Ninjas endpoints
  */
 
-import { 
-   ApiNinjasSp500Item, 
-   ApiNinjasSp500Response, 
-   ApiNinjasStockQuote, 
-   ApiNinjasCompanyProfile, 
+import {
+   ApiNinjasSp500Item,
+   ApiNinjasSp500Response,
+   ApiNinjasStockQuote,
+   ApiNinjasCompanyProfile,
    DateRange,
-   ApiErrorResponse 
+   ApiErrorResponse
 } from './types';
 
 export class ApiNinjasClient {
@@ -88,7 +88,7 @@ export class ApiNinjasClient {
    async getPriceHistory(symbol: string, range?: DateRange): Promise<any> {
       const toDate = range?.to ?? new Date().toISOString().slice(0, 10);
       const fromDate = range?.from ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      
+
       const endpoint = `/stock?symbol=${encodeURIComponent(symbol.toUpperCase())}&from=${fromDate}&to=${toDate}`;
       return this.makeRequest<any>(endpoint);
    }
@@ -129,14 +129,14 @@ export class ApiNinjasClient {
    } {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const isTimeout = ApiNinjasClient.isTimeoutError(error);
-      
+
       console.error(`Error in ApiNinjasClient.${operation}:`, {
          symbol: symbol?.toUpperCase(),
          error: errorMessage,
          isTimeout,
          timestamp: new Date().toISOString()
       });
-      
+
       return {
          error: isTimeout ? 'Request timeout' : `Failed to ${operation} from API Ninjas`,
          message: isTimeout ? 'The request took too long to complete' : errorMessage,

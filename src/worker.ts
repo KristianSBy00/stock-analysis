@@ -49,7 +49,7 @@ export default {
          // Don't throw - cron jobs should handle errors gracefully
       }
    },
-   
+
    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
       const url = new URL(request.url);
       const path = url.pathname;
@@ -68,11 +68,11 @@ export default {
                   subject: 'API requested mail',
                   text: 'This mail is sent by the API request from the user in ' + env.ENVIRONMENT,
                });
-               
+
                if (data) {
                   console.log(`Email ${data.id} has been sent`);
                }
-               else{
+               else {
                   console.log('Email not sent');
                }
 
@@ -130,7 +130,7 @@ export default {
 
             case '/test':
                const symbol = url.searchParams.get('symbol') || 'AAPL';
-               
+
                // Example using direct fetch to Finnhub API (more reliable than callback-based client)
                if (!env.FINNHUB_API_KEY) {
                   return new Response(JSON.stringify({
@@ -141,16 +141,16 @@ export default {
                      headers: { 'Content-Type': 'application/json', ...corsHeaders }
                   });
                }
-               
+
                try {
                   const finnhubClient = new FinnhubClient(env.FINNHUB_API_KEY);
-               
+
                   const insiderData = await finnhubClient.getInsiderTransactions(symbol, { from: '2025-01-01', to: '2025-09-21' });
                   console.log('Insider transactions data:', insiderData);
-                  
+
                   if (insiderData.data && insiderData.data.length > 0) {
                      for (var i = 0; i < insiderData.data.length; i++) {
-                        if(['P', 'S', 'V'].includes(insiderData.data[i].transactionCode as string)) {
+                        if (['P', 'S', 'V'].includes(insiderData.data[i].transactionCode as string)) {
                            console.log('Insider transaction code:', insiderData.data[i]);
                         }
                      }
@@ -167,7 +167,7 @@ export default {
                   });
                } catch (error) {
                   const errorResponse = FinnhubClient.createErrorResponse(error, 'fetch insider transactions', symbol);
-                  
+
                   return new Response(JSON.stringify(errorResponse), {
                      status: errorResponse.status,
                      headers: {
@@ -222,7 +222,7 @@ export default {
 
             case '/api/api-ninjas/sp500':
                if (method === 'GET') {
-                  
+
                   const response = await getApiNinjasSp500(env);
                   const data = await response.json();
                   const stockAnalysisDB = new StockAnalysisDB(env.API_NINJAS_API_KEY!);
@@ -296,7 +296,7 @@ async function getYahooStockData(symbol: string, env: { FINNHUB_API_KEY?: string
    try {
       // Yahoo Finance API endpoint with proper headers
       const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol.toUpperCase()}`;
-      
+
       const headers: Record<string, string> = {
          'Accept': 'application/json',
       };
@@ -304,50 +304,50 @@ async function getYahooStockData(symbol: string, env: { FINNHUB_API_KEY?: string
       // Add timeout to prevent hanging
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
-      const response = await fetch(yahooUrl, { 
+
+      const response = await fetch(yahooUrl, {
          headers,
          signal: controller.signal
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       if (!response.ok) {
          throw new Error(`Yahoo Finance API error: ${response.status} ${response.statusText}`);
       }
-      
+
       const data = await response.json();
-      
+
       // Check if we have valid data
       if (!data.chart || !data.chart.result || data.chart.result.length === 0) {
          throw new Error('No data available for symbol: ' + symbol);
       }
-      
+
       // Extract relevant data from Yahoo Finance response
       const chart = data.chart.result[0];
       const meta = chart.meta;
-      
+
       if (!meta) {
          throw new Error('Invalid data structure from Yahoo Finance');
       }
-      
+
       const stockData = {
          symbol: meta.symbol || symbol.toUpperCase(),
          name: meta.longName || meta.shortName || `${symbol.toUpperCase()} Corporation`,
          price: meta.regularMarketPrice || meta.previousClose || 0,
          change: (meta.regularMarketPrice || meta.previousClose || 0) - (meta.previousClose || 0),
-         changePercent: meta.previousClose ? 
+         changePercent: meta.previousClose ?
             (((meta.regularMarketPrice || meta.previousClose) - meta.previousClose) / meta.previousClose) * 100 : 0,
          volume: meta.regularMarketVolume || 0,
          marketCap: meta.marketCap || 0,
          currency: meta.currency || 'USD',
          exchange: meta.exchangeName || 'Unknown',
-         lastUpdated: meta.regularMarketTime ? 
-            new Date(meta.regularMarketTime * 1000).toISOString() : 
+         lastUpdated: meta.regularMarketTime ?
+            new Date(meta.regularMarketTime * 1000).toISOString() :
             new Date().toISOString(),
          source: 'Yahoo Finance'
       };
-      
+
       return new Response(JSON.stringify(stockData), {
          status: 200,
          headers: {
@@ -355,18 +355,18 @@ async function getYahooStockData(symbol: string, env: { FINNHUB_API_KEY?: string
             ...corsHeaders
          }
       });
-      
+
    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const isTimeout = error instanceof Error && error.name === 'AbortError';
-      
+
       console.error('Error fetching Yahoo Finance data:', {
          symbol: symbol.toUpperCase(),
          error: errorMessage,
          isTimeout,
          timestamp: new Date().toISOString()
       });
-      
+
       return new Response(JSON.stringify({
          error: isTimeout ? 'Request timeout' : 'Failed to fetch stock data from Yahoo Finance',
          message: isTimeout ? 'The request took too long to complete' : errorMessage,
@@ -420,7 +420,7 @@ async function getFinnhubQuote(symbol: string, env: { FINNHUB_API_KEY?: string }
       });
    } catch (error) {
       const errorResponse = FinnhubClient.createErrorResponse(error, 'fetch quote', symbol);
-      
+
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -476,7 +476,7 @@ async function getFinnhubCompanyNews(
       });
    } catch (error) {
       const errorResponse = FinnhubClient.createErrorResponse(error, 'fetch company news', symbol);
-      
+
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -537,7 +537,7 @@ async function getFinnhubInsiderTransactions(
       });
    } catch (error) {
       const errorResponse = FinnhubClient.createErrorResponse(error, 'fetch insider transactions', symbol);
-      
+
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -573,7 +573,7 @@ async function getApiNinjasSp500(env: { API_NINJAS_API_KEY?: string }): Promise<
       });
    } catch (error) {
       const errorResponse = ApiNinjasClient.createErrorResponse(error, 'fetch S&P 500 data');
-      
+
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -609,7 +609,7 @@ async function getApiNinjasQuote(symbol: string, env: { API_NINJAS_API_KEY?: str
       });
    } catch (error) {
       const errorResponse = ApiNinjasClient.createErrorResponse(error, 'fetch quote', symbol);
-      
+
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -645,7 +645,7 @@ async function getApiNinjasProfile(symbol: string, env: { API_NINJAS_API_KEY?: s
       });
    } catch (error) {
       const errorResponse = ApiNinjasClient.createErrorResponse(error, 'fetch company profile', symbol);
-      
+
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,
          headers: { 'Content-Type': 'application/json', ...corsHeaders }

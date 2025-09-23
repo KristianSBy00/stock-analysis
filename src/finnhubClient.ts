@@ -3,13 +3,13 @@
  * Provides timeout protection and consistent error handling for all Finnhub endpoints
  */
 
-import { 
-   FinnhubQuote, 
-   FinnhubNewsItem, 
-   FinnhubInsiderTransaction, 
-   FinnhubInsiderTransactionsResponse, 
+import {
+   FinnhubQuote,
+   FinnhubNewsItem,
+   FinnhubInsiderTransaction,
+   FinnhubInsiderTransactionsResponse,
    DateRange,
-   ApiErrorResponse 
+   ApiErrorResponse
 } from './types';
 
 export class FinnhubClient {
@@ -67,7 +67,7 @@ export class FinnhubClient {
    async getCompanyNews(symbol: string, range?: DateRange): Promise<FinnhubNewsItem[]> {
       const toDate = range?.to ?? new Date().toISOString().slice(0, 10);
       const fromDate = range?.from ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      
+
       const endpoint = `/company-news?symbol=${encodeURIComponent(symbol.toUpperCase())}&from=${fromDate}&to=${toDate}&token=${this.apiKey}`;
       const data = await this.makeRequest<FinnhubNewsItem[]>(endpoint);
       return Array.isArray(data) ? data : [];
@@ -79,7 +79,7 @@ export class FinnhubClient {
    async getInsiderTransactions(symbol: string, range?: DateRange): Promise<FinnhubInsiderTransactionsResponse> {
       const toDate = range?.to ?? new Date().toISOString().slice(0, 10);
       const fromDate = range?.from ?? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      
+
       const endpoint = `/stock/insider-transactions?symbol=${encodeURIComponent(symbol.toUpperCase())}&from=${fromDate}&to=${toDate}&token=${this.apiKey}`;
       return this.makeRequest<FinnhubInsiderTransactionsResponse>(endpoint);
    }
@@ -104,14 +104,14 @@ export class FinnhubClient {
    } {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const isTimeout = FinnhubClient.isTimeoutError(error);
-      
+
       console.error(`Error in FinnhubClient.${operation}:`, {
          symbol: symbol.toUpperCase(),
          error: errorMessage,
          isTimeout,
          timestamp: new Date().toISOString()
       });
-      
+
       return {
          error: isTimeout ? 'Request timeout' : `Failed to ${operation} from Finnhub`,
          message: isTimeout ? 'The request took too long to complete' : errorMessage,
