@@ -4,8 +4,7 @@
  */
 
 import yahooFinance from 'yahoo-finance2';
-import { FinnhubClient } from './finnhubClient';
-import { ApiNinjasClient } from './apiNinjasClient';
+import { ApiClient, ApiProvider } from './apiClient';
 import { Resend } from 'resend';
 import { StockAnalysisDB } from './stockAnalasysDB';
 import { Env } from './types';
@@ -143,9 +142,11 @@ export default {
                }
 
                try {
-                  const finnhubClient = new FinnhubClient(env.FINNHUB_API_KEY);
+                  const apiClient = new ApiClient({
+                     finnhubApiKey: env.FINNHUB_API_KEY
+                  });
 
-                  const insiderData = await finnhubClient.getInsiderTransactions(symbol, { from: '2025-01-01', to: '2025-09-21' });
+                  const insiderData = await apiClient.getFinnhubInsiderTransactions(symbol, { from: '2025-01-01', to: '2025-09-21' });
                   console.log('Insider transactions data:', insiderData);
 
                   if (insiderData.data && insiderData.data.length > 0) {
@@ -158,7 +159,7 @@ export default {
                   return new Response(JSON.stringify({
                      symbol: symbol.toUpperCase(),
                      insiderTransactions: insiderData,
-                     source: 'FinnhubClient'
+                     source: 'ApiClient (Finnhub)'
                   }), {
                      headers: {
                         'Content-Type': 'application/json',
@@ -166,7 +167,7 @@ export default {
                      }
                   });
                } catch (error) {
-                  const errorResponse = FinnhubClient.createErrorResponse(error, 'fetch insider transactions', symbol);
+                  const errorResponse = ApiClient.createFinnhubErrorResponse(error, 'fetch insider transactions', symbol);
 
                   return new Response(JSON.stringify(errorResponse), {
                      status: errorResponse.status,
@@ -398,8 +399,10 @@ async function getFinnhubQuote(symbol: string, env: { FINNHUB_API_KEY?: string }
          });
       }
 
-      const finnhubClient = new FinnhubClient(env.FINNHUB_API_KEY);
-      const quoteData = await finnhubClient.getQuote(symbol);
+      const apiClient = new ApiClient({
+         finnhubApiKey: env.FINNHUB_API_KEY
+      });
+      const quoteData = await apiClient.getFinnhubQuote(symbol);
 
       const payload = {
          symbol: symbol.toUpperCase(),
@@ -411,7 +414,7 @@ async function getFinnhubQuote(symbol: string, env: { FINNHUB_API_KEY?: string }
          open: quoteData.o ?? 0,
          previousClose: quoteData.pc ?? 0,
          lastUpdated: quoteData.t ? new Date((quoteData.t as number) * 1000).toISOString() : new Date().toISOString(),
-         source: 'FinnhubClient'
+         source: 'ApiClient (Finnhub)'
       };
 
       return new Response(JSON.stringify(payload), {
@@ -419,7 +422,7 @@ async function getFinnhubQuote(symbol: string, env: { FINNHUB_API_KEY?: string }
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
    } catch (error) {
-      const errorResponse = FinnhubClient.createErrorResponse(error, 'fetch quote', symbol);
+      const errorResponse = ApiClient.createFinnhubErrorResponse(error, 'fetch quote', symbol);
 
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,
@@ -447,8 +450,10 @@ async function getFinnhubCompanyNews(
          });
       }
 
-      const finnhubClient = new FinnhubClient(env.FINNHUB_API_KEY);
-      const newsData = await finnhubClient.getCompanyNews(symbol, range);
+      const apiClient = new ApiClient({
+         finnhubApiKey: env.FINNHUB_API_KEY
+      });
+      const newsData = await apiClient.getFinnhubCompanyNews(symbol, range);
 
       // Default to the last 7 days if dates not provided
       const toDate = range?.to ?? new Date().toISOString().slice(0, 10);
@@ -475,7 +480,7 @@ async function getFinnhubCompanyNews(
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
    } catch (error) {
-      const errorResponse = FinnhubClient.createErrorResponse(error, 'fetch company news', symbol);
+      const errorResponse = ApiClient.createFinnhubErrorResponse(error, 'fetch company news', symbol);
 
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,
@@ -503,8 +508,10 @@ async function getFinnhubInsiderTransactions(
          });
       }
 
-      const finnhubClient = new FinnhubClient(env.FINNHUB_API_KEY);
-      const data = await finnhubClient.getInsiderTransactions(symbol, range);
+      const apiClient = new ApiClient({
+         finnhubApiKey: env.FINNHUB_API_KEY
+      });
+      const data = await apiClient.getFinnhubInsiderTransactions(symbol, range);
 
       // Default to last 90 days if not provided (Finnhub allows since/from filters)
       const toDate = range?.to ?? new Date().toISOString().slice(0, 10);
@@ -536,7 +543,7 @@ async function getFinnhubInsiderTransactions(
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
    } catch (error) {
-      const errorResponse = FinnhubClient.createErrorResponse(error, 'fetch insider transactions', symbol);
+      const errorResponse = ApiClient.createFinnhubErrorResponse(error, 'fetch insider transactions', symbol);
 
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,
@@ -560,11 +567,13 @@ async function getApiNinjasSp500(env: { API_NINJAS_API_KEY?: string }): Promise<
          });
       }
 
-      const apiNinjasClient = new ApiNinjasClient(env.API_NINJAS_API_KEY);
-      const sp500Data = await apiNinjasClient.getSp500();
+      const apiClient = new ApiClient({
+         apiNinjasApiKey: env.API_NINJAS_API_KEY
+      });
+      const sp500Data = await apiClient.getApiNinjasSp500();
 
       return new Response(JSON.stringify({
-         source: 'API Ninjas',
+         source: 'ApiClient (API Ninjas)',
          count: sp500Data.count,
          data: sp500Data.data
       }), {
@@ -572,7 +581,7 @@ async function getApiNinjasSp500(env: { API_NINJAS_API_KEY?: string }): Promise<
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
    } catch (error) {
-      const errorResponse = ApiNinjasClient.createErrorResponse(error, 'fetch S&P 500 data');
+      const errorResponse = ApiClient.createApiNinjasErrorResponse(error, 'fetch S&P 500 data');
 
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,
@@ -596,19 +605,21 @@ async function getApiNinjasQuote(symbol: string, env: { API_NINJAS_API_KEY?: str
          });
       }
 
-      const apiNinjasClient = new ApiNinjasClient(env.API_NINJAS_API_KEY);
-      const quoteData = await apiNinjasClient.getQuote(symbol);
+      const apiClient = new ApiClient({
+         apiNinjasApiKey: env.API_NINJAS_API_KEY
+      });
+      const quoteData = await apiClient.getApiNinjasQuote(symbol);
 
       return new Response(JSON.stringify({
          symbol: symbol.toUpperCase(),
-         source: 'API Ninjas',
+         source: 'ApiClient (API Ninjas)',
          ...quoteData
       }), {
          status: 200,
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
    } catch (error) {
-      const errorResponse = ApiNinjasClient.createErrorResponse(error, 'fetch quote', symbol);
+      const errorResponse = ApiClient.createApiNinjasErrorResponse(error, 'fetch quote', symbol);
 
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,
@@ -632,19 +643,21 @@ async function getApiNinjasProfile(symbol: string, env: { API_NINJAS_API_KEY?: s
          });
       }
 
-      const apiNinjasClient = new ApiNinjasClient(env.API_NINJAS_API_KEY);
-      const profileData = await apiNinjasClient.getCompanyProfile(symbol);
+      const apiClient = new ApiClient({
+         apiNinjasApiKey: env.API_NINJAS_API_KEY
+      });
+      const profileData = await apiClient.getApiNinjasCompanyProfile(symbol);
 
       return new Response(JSON.stringify({
          symbol: symbol.toUpperCase(),
-         source: 'API Ninjas',
+         source: 'ApiClient (API Ninjas)',
          ...profileData
       }), {
          status: 200,
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
    } catch (error) {
-      const errorResponse = ApiNinjasClient.createErrorResponse(error, 'fetch company profile', symbol);
+      const errorResponse = ApiClient.createApiNinjasErrorResponse(error, 'fetch company profile', symbol);
 
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,
