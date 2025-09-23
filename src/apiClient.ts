@@ -24,26 +24,61 @@ export enum ApiProvider {
 export interface ApiClientConfig {
    finnhubApiKey?: string;
    apiNinjasApiKey?: string;
+   secApiKey?: string;
    timeoutMs?: number;
 }
 
 export class ApiClient {
+   //https://api.sec-api.io/mapping/exchange/nasdaq?token=c055419baf93afb8580621efb1b09b5d4da4698a6a7adf2235bed2aeb8f112be
    private readonly finnhubApiKey?: string;
    private readonly apiNinjasApiKey?: string;
+   private readonly secApiKey?: string;
    private readonly timeoutMs: number;
 
    // API Base URLs
    private readonly finnhubBaseUrl = 'https://finnhub.io/api/v1';
    private readonly apiNinjasBaseUrl = 'https://api.api-ninjas.com/v1';
+   private readonly secApiBaseUrl = 'https://sec-api.io/';
 
    constructor(config: ApiClientConfig) {
       this.finnhubApiKey = config.finnhubApiKey;
       this.apiNinjasApiKey = config.apiNinjasApiKey;
+      this.secApiKey = config.secApiKey;
       this.timeoutMs = config.timeoutMs ?? 10000; // Default 10 seconds
 
       // Validate that at least one API key is provided
-      if (!this.finnhubApiKey && !this.apiNinjasApiKey) {
-         throw new Error('ApiClient requires at least one API key (finnhubApiKey or apiNinjasApiKey)');
+      if (!this.finnhubApiKey && !this.apiNinjasApiKey && !this.secApiKey) {
+         throw new Error('ApiClient requires at least one API key (finnhubApiKey or apiNinjasApiKey or secApiKey)');
+      }
+   }
+
+   private async makesSecApiRequest<T>(endpoint: string): Promise<T> {
+      if (!this.secApiKey) {
+         throw new Error('Sec API key is not configured');
+      }
+
+      const url = `${this.secApiBaseUrl}${endpoint}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
+      try {
+         const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+               'Accept': 'application/json'
+            }
+         });
+
+         clearTimeout(timeoutId);
+
+         if (!response.ok) {
+            throw new Error(`Sec API error: ${response.status} ${response.statusText}`);
+         }
+
+         return await response.json() as T;
+      } catch (error) {
+         clearTimeout(timeoutId);
+         throw error;
       }
    }
 
@@ -124,6 +159,11 @@ export class ApiClient {
    async getFinnhubQuote(symbol: string): Promise<FinnhubQuote> {
       const endpoint = `/quote?symbol=${encodeURIComponent(symbol.toUpperCase())}&token=${this.finnhubApiKey}`;
       return this.makeFinnhubRequest<FinnhubQuote>(endpoint);
+   }
+
+   async getSecApiExchange(exchange: string): Promise<any> {
+      const endpoint = `/mapping/exchange/${exchange}?token=${this.secApiKey}`;
+      return this.makesSecApiRequest<any>(endpoint);
    }
 
    /**

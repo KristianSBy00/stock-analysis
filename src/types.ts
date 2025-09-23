@@ -40,6 +40,7 @@ export interface Env {
    RESEND_API_KEY?: string;
    MY_GMAIL_ADDRESS?: string;
    ENVIRONMENT?: string;
+   SEC_API_KEY?: string;
 }
 
 // ============================================================================

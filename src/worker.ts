@@ -128,55 +128,11 @@ export default {
                }
 
             case '/test':
-               const symbol = url.searchParams.get('symbol') || 'AAPL';
-
-               // Example using direct fetch to Finnhub API (more reliable than callback-based client)
-               if (!env.FINNHUB_API_KEY) {
-                  return new Response(JSON.stringify({
-                     error: 'Missing configuration',
-                     message: 'FINNHUB_API_KEY is not set. Add it via `wrangler secret put FINNHUB_API_KEY`.'
-                  }), {
-                     status: 500,
-                     headers: { 'Content-Type': 'application/json', ...corsHeaders }
-                  });
-               }
-
-               try {
-                  const apiClient = new ApiClient({
-                     finnhubApiKey: env.FINNHUB_API_KEY
-                  });
-
-                  const insiderData = await apiClient.getFinnhubInsiderTransactions(symbol, { from: '2025-01-01', to: '2025-09-21' });
-                  console.log('Insider transactions data:', insiderData);
-
-                  if (insiderData.data && insiderData.data.length > 0) {
-                     for (var i = 0; i < insiderData.data.length; i++) {
-                        if (['P', 'S', 'V'].includes(insiderData.data[i].transactionCode as string)) {
-                           console.log('Insider transaction code:', insiderData.data[i]);
-                        }
-                     }
-                  }
-                  return new Response(JSON.stringify({
-                     symbol: symbol.toUpperCase(),
-                     insiderTransactions: insiderData,
-                     source: 'ApiClient (Finnhub)'
-                  }), {
-                     headers: {
-                        'Content-Type': 'application/json',
-                        ...corsHeaders
-                     }
-                  });
-               } catch (error) {
-                  const errorResponse = ApiClient.createFinnhubErrorResponse(error, 'fetch insider transactions', symbol);
-
-                  return new Response(JSON.stringify(errorResponse), {
-                     status: errorResponse.status,
-                     headers: {
-                        'Content-Type': 'application/json',
-                        ...corsHeaders
-                     }
-                  });
-               }
+               const exchange = url.searchParams.get('exchange') || 'nasdaq';
+               const apiClient = new ApiClient({
+                  secApiKey: env.SEC_API_KEY,
+               });
+               return await apiClient.getSecApiExchange(exchange);
 
             case '/index.html':
                // Serve the HTML file from assets
