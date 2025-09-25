@@ -16,6 +16,7 @@ import {
    Env
 } from './types';
 import { JWTUtils } from './jwtUtils';
+import { StockAnalysisDB } from './stockAnalasysDB';
 
 export class AuthManager {
    private db: D1Database;
@@ -44,24 +45,8 @@ export class AuthManager {
          const passwordHash = await this.hashPassword(request.password);
 
          // Create user
-         const result = await this.db.prepare(`
-            INSERT INTO users (email, password_hash, first_name, last_name)
-            VALUES (?, ?, ?, ?)
-         `).bind(
-            request.email,
-            passwordHash,
-            request.firstName || null,
-            request.lastName || null
-         ).run();
+         const userId = await StockAnalysisDB.createUser(this.db, request.email, passwordHash);
 
-         if (!result.success) {
-            return {
-               success: false,
-               message: 'Failed to create user account'
-            };
-         }
-
-         const userId = result.meta.last_row_id;
          const user = await this.getUserById(userId);
 
          if (!user) {

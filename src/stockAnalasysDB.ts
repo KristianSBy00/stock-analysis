@@ -3,7 +3,7 @@
  * Handles storage and retrieval of insider transactions and other stock data
  */
 
-import { InsiderTransaction, Env, PortfolioHolding } from './types';
+import { InsiderTransaction, Env, PortfolioHolding, User } from './types';
 
 export abstract class StockAnalysisDB {
    /**
@@ -18,7 +18,28 @@ export abstract class StockAnalysisDB {
     * @param sp500Companies - S&P 500 companies data containing ticker information
     * @param clearExisting - Whether to clear existing data first (default: true)
     * @throws Error if the data is invalid or database operation fails
-    */
+    *     */
+
+   static async createUser(db: D1Database, email: String, passwordHash: string): Promise<number> {
+      try {
+         const result = await db.prepare(`
+            INSERT INTO users (email, password_hash, first_name, last_name)
+            VALUES (?, ?, ?, ?)
+         `).bind(
+            email,
+            passwordHash,
+            null,
+            null
+         ).run();
+
+         return result.meta.last_row_id;
+      }
+      catch (error) {
+         console.error('Failed to create user:', error);
+         throw new Error(`Database operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+   }
+
    async storeSp500Tickers(env: Env, sp500Companies: any, clearExisting: boolean = true): Promise<void> {
       try {
          // Validate input data
