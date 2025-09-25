@@ -111,12 +111,37 @@ export default {
                break;
 
             case '/api/portfolios/':
-               if (method === 'GET') {
-                  return await handleGetPortfolio(request, env);
-               } else if (method === 'PUT') {
-                  return await handleUpdatePortfolio(request, env);
-               } else if (method === 'DELETE') {
-                  return await handleDeletePortfolio(request, env);
+               console.log(request);
+               // Handle portfolio-specific routes with dynamic ID
+               if (path.includes('/holdings')) {
+                  if (method === 'GET') {
+                     return await handleGetPortfolioHoldings(request, env);
+                  } else if (method === 'POST') {
+                     return await handleAddStockToPortfolio(request, env);
+                  } else if (method === 'PUT') {
+                     return await handleUpdatePortfolioHolding(request, env);
+                  } else if (method === 'DELETE') {
+                     return await handleRemoveStockFromPortfolio(request, env);
+                  }
+               } else if (path.includes('/transactions')) {
+                  if (method === 'GET') {
+                     return await handleGetPortfolioTransactions(request, env);
+                  } else if (method === 'POST') {
+                     return await handleAddPortfolioTransaction(request, env);
+                  }
+               } else if (path.includes('/summary')) {
+                  if (method === 'GET') {
+                     return await handleGetPortfolioSummary(request, env);
+                  }
+               } else {
+                  // Handle basic portfolio CRUD operations
+                  if (method === 'GET') {
+                     return await handleGetPortfolio(request, env);
+                  } else if (method === 'PUT') {
+                     return await handleUpdatePortfolio(request, env);
+                  } else if (method === 'DELETE') {
+                     return await handleDeletePortfolio(request, env);
+                  }
                }
                break;
 
@@ -1201,6 +1226,617 @@ async function handleDeletePortfolio(request: Request, env: Env): Promise<Respon
       return new Response(JSON.stringify({
          success: false,
          message: 'Failed to delete portfolio'
+      }), {
+         status: 500,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+// ============================================================================
+// Portfolio Holdings Handler Functions (Protected Routes)
+// ============================================================================
+
+/**
+ * Handle get portfolio holdings
+ */
+async function handleGetPortfolioHoldings(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const authResult = await authMiddleware.requireAuth(request);
+
+   if (authResult instanceof Response) {
+      return authResult;
+   }
+
+   const { auth } = authResult;
+
+   try {
+      const url = new URL(request.url);
+      const portfolioId = url.pathname.split('/')[3]; // Extract portfolio ID from /api/portfolios/{id}/holdings
+
+      if (!portfolioId) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio ID is required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Verify portfolio belongs to user
+      const portfolioResult = await env.stock_analysis.prepare(`
+         SELECT id FROM user_portfolios
+         WHERE id = ? AND user_id = ?
+      `).bind(portfolioId, auth.user.id).first();
+
+      if (!portfolioResult) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio not found'
+         }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Get portfolio holdings
+      const holdingsResult = await env.stock_analysis.prepare(`
+         SELECT * FROM portfolio_holdings
+         WHERE portfolio_id = ?
+         ORDER BY symbol ASC
+      `).bind(portfolioId).all();
+
+      return new Response(JSON.stringify({
+         success: true,
+         holdings: holdingsResult.results
+      }), {
+         status: 200,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Failed to fetch portfolio holdings'
+      }), {
+         status: 500,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+/**
+ * Handle add stock to portfolio
+ */
+async function handleAddStockToPortfolio(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const authResult = await authMiddleware.requireAuth(request);
+
+   if (authResult instanceof Response) {
+      return authResult;
+   }
+
+   const { auth } = authResult;
+
+   try {
+      const url = new URL(request.url);
+      const portfolioId = url.pathname.split('/')[3];
+      const body = await request.json();
+      const { symbol, quantity, pricePerShare, fees = 0, transactionDate } = body;
+
+      if (!portfolioId) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio ID is required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      if (!symbol || !quantity || !pricePerShare || !transactionDate) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Symbol, quantity, price per share, and transaction date are required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Verify portfolio belongs to user
+      const portfolioResult = await env.stock_analysis.prepare(`
+         SELECT id FROM user_portfolios
+         WHERE id = ? AND user_id = ?
+      `).bind(portfolioId, auth.user.id).first();
+
+      if (!portfolioResult) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio not found'
+         }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      const totalAmount = quantity * pricePerShare;
+
+      // Add transaction record
+      const transactionResult = await env.stock_analysis.prepare(`
+         INSERT INTO portfolio_transactions (portfolio_id, symbol, transaction_type, quantity, price_per_share, total_amount, fees, transaction_date)
+         VALUES (?, ?, 'BUY', ?, ?, ?, ?, ?)
+      `).bind(portfolioId, symbol, quantity, pricePerShare, totalAmount, fees, transactionDate).run();
+
+      if (!transactionResult.success) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Failed to add transaction'
+         }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Check if holding already exists
+      const existingHolding = await env.stock_analysis.prepare(`
+         SELECT * FROM portfolio_holdings
+         WHERE portfolio_id = ? AND symbol = ?
+      `).bind(portfolioId, symbol).first();
+
+      if (existingHolding) {
+         // Update existing holding
+         const newQuantity = existingHolding.quantity + quantity;
+         const newTotalCost = existingHolding.total_cost + totalAmount;
+         const newAverageCost = newTotalCost / newQuantity;
+
+         await env.stock_analysis.prepare(`
+            UPDATE portfolio_holdings
+            SET quantity = ?, average_cost = ?, total_cost = ?, last_updated = CURRENT_TIMESTAMP
+            WHERE portfolio_id = ? AND symbol = ?
+         `).bind(newQuantity, newAverageCost, newTotalCost, portfolioId, symbol).run();
+      } else {
+         // Create new holding
+         await env.stock_analysis.prepare(`
+            INSERT INTO portfolio_holdings (portfolio_id, symbol, quantity, average_cost, total_cost, last_updated)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+         `).bind(portfolioId, symbol, quantity, pricePerShare, totalAmount).run();
+      }
+
+      return new Response(JSON.stringify({
+         success: true,
+         message: 'Stock added to portfolio successfully'
+      }), {
+         status: 201,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Failed to add stock to portfolio'
+      }), {
+         status: 500,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+/**
+ * Handle update portfolio holding
+ */
+async function handleUpdatePortfolioHolding(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const authResult = await authMiddleware.requireAuth(request);
+
+   if (authResult instanceof Response) {
+      return authResult;
+   }
+
+   const { auth } = authResult;
+
+   try {
+      const url = new URL(request.url);
+      const portfolioId = url.pathname.split('/')[3];
+      const body = await request.json();
+      const { symbol, currentPrice } = body;
+
+      if (!portfolioId || !symbol || !currentPrice) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio ID, symbol, and current price are required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Verify portfolio belongs to user
+      const portfolioResult = await env.stock_analysis.prepare(`
+         SELECT id FROM user_portfolios
+         WHERE id = ? AND user_id = ?
+      `).bind(portfolioId, auth.user.id).first();
+
+      if (!portfolioResult) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio not found'
+         }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Get current holding
+      const holding = await env.stock_analysis.prepare(`
+         SELECT * FROM portfolio_holdings
+         WHERE portfolio_id = ? AND symbol = ?
+      `).bind(portfolioId, symbol).first();
+
+      if (!holding) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Holding not found'
+         }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Calculate new values
+      const currentValue = holding.quantity * currentPrice;
+      const unrealizedGainLoss = currentValue - holding.total_cost;
+      const unrealizedGainLossPercent = (unrealizedGainLoss / holding.total_cost) * 100;
+
+      // Update holding
+      await env.stock_analysis.prepare(`
+         UPDATE portfolio_holdings
+         SET current_price = ?, current_value = ?, unrealized_gain_loss = ?,
+             unrealized_gain_loss_percent = ?, last_updated = CURRENT_TIMESTAMP
+         WHERE portfolio_id = ? AND symbol = ?
+      `).bind(currentPrice, currentValue, unrealizedGainLoss, unrealizedGainLossPercent, portfolioId, symbol).run();
+
+      return new Response(JSON.stringify({
+         success: true,
+         message: 'Holding updated successfully'
+      }), {
+         status: 200,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Failed to update holding'
+      }), {
+         status: 500,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+/**
+ * Handle remove stock from portfolio
+ */
+async function handleRemoveStockFromPortfolio(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const authResult = await authMiddleware.requireAuth(request);
+
+   if (authResult instanceof Response) {
+      return authResult;
+   }
+
+   const { auth } = authResult;
+
+   try {
+      const url = new URL(request.url);
+      const portfolioId = url.pathname.split('/')[3];
+      const symbol = url.searchParams.get('symbol');
+
+      if (!portfolioId || !symbol) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio ID and symbol are required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Verify portfolio belongs to user
+      const portfolioResult = await env.stock_analysis.prepare(`
+         SELECT id FROM user_portfolios
+         WHERE id = ? AND user_id = ?
+      `).bind(portfolioId, auth.user.id).first();
+
+      if (!portfolioResult) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio not found'
+         }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Remove holding
+      const result = await env.stock_analysis.prepare(`
+         DELETE FROM portfolio_holdings
+         WHERE portfolio_id = ? AND symbol = ?
+      `).bind(portfolioId, symbol).run();
+
+      if (!result.success) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Failed to remove stock from portfolio'
+         }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      return new Response(JSON.stringify({
+         success: true,
+         message: 'Stock removed from portfolio successfully'
+      }), {
+         status: 200,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Failed to remove stock from portfolio'
+      }), {
+         status: 500,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+/**
+ * Handle get portfolio transactions
+ */
+async function handleGetPortfolioTransactions(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const authResult = await authMiddleware.requireAuth(request);
+
+   if (authResult instanceof Response) {
+      return authResult;
+   }
+
+   const { auth } = authResult;
+
+   try {
+      const url = new URL(request.url);
+      const portfolioId = url.pathname.split('/')[3];
+
+      if (!portfolioId) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio ID is required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Verify portfolio belongs to user
+      const portfolioResult = await env.stock_analysis.prepare(`
+         SELECT id FROM user_portfolios
+         WHERE id = ? AND user_id = ?
+      `).bind(portfolioId, auth.user.id).first();
+
+      if (!portfolioResult) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio not found'
+         }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Get transactions
+      const transactionsResult = await env.stock_analysis.prepare(`
+         SELECT * FROM portfolio_transactions
+         WHERE portfolio_id = ?
+         ORDER BY transaction_date DESC, created_at DESC
+      `).bind(portfolioId).all();
+
+      return new Response(JSON.stringify({
+         success: true,
+         transactions: transactionsResult.results
+      }), {
+         status: 200,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Failed to fetch portfolio transactions'
+      }), {
+         status: 500,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+/**
+ * Handle add portfolio transaction
+ */
+async function handleAddPortfolioTransaction(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const authResult = await authMiddleware.requireAuth(request);
+
+   if (authResult instanceof Response) {
+      return authResult;
+   }
+
+   const { auth } = authResult;
+
+   try {
+      const url = new URL(request.url);
+      const portfolioId = url.pathname.split('/')[3];
+      const body = await request.json();
+      const { symbol, transactionType, quantity, pricePerShare, fees = 0, transactionDate, notes } = body;
+
+      if (!portfolioId) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio ID is required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      if (!symbol || !transactionType || !quantity || !pricePerShare || !transactionDate) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Symbol, transaction type, quantity, price per share, and transaction date are required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Verify portfolio belongs to user
+      const portfolioResult = await env.stock_analysis.prepare(`
+         SELECT id FROM user_portfolios
+         WHERE id = ? AND user_id = ?
+      `).bind(portfolioId, auth.user.id).first();
+
+      if (!portfolioResult) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio not found'
+         }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      const totalAmount = quantity * pricePerShare;
+
+      // Add transaction record
+      const transactionResult = await env.stock_analysis.prepare(`
+         INSERT INTO portfolio_transactions (portfolio_id, symbol, transaction_type, quantity, price_per_share, total_amount, fees, transaction_date, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(portfolioId, symbol, transactionType, quantity, pricePerShare, totalAmount, fees, transactionDate, notes || null).run();
+
+      if (!transactionResult.success) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Failed to add transaction'
+         }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      return new Response(JSON.stringify({
+         success: true,
+         message: 'Transaction added successfully',
+         transactionId: transactionResult.meta.last_row_id
+      }), {
+         status: 201,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Failed to add transaction'
+      }), {
+         status: 500,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+/**
+ * Handle get portfolio summary
+ */
+async function handleGetPortfolioSummary(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const authResult = await authMiddleware.requireAuth(request);
+
+   if (authResult instanceof Response) {
+      return authResult;
+   }
+
+   const { auth } = authResult;
+
+   try {
+      const url = new URL(request.url);
+      const portfolioId = url.pathname.split('/')[3];
+
+      if (!portfolioId) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio ID is required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Verify portfolio belongs to user and get portfolio info
+      const portfolioResult = await env.stock_analysis.prepare(`
+         SELECT * FROM user_portfolios
+         WHERE id = ? AND user_id = ?
+      `).bind(portfolioId, auth.user.id).first();
+
+      if (!portfolioResult) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio not found'
+         }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Get portfolio holdings
+      const holdingsResult = await env.stock_analysis.prepare(`
+         SELECT * FROM portfolio_holdings
+         WHERE portfolio_id = ?
+         ORDER BY symbol ASC
+      `).bind(portfolioId).all();
+
+      const holdings = holdingsResult.results;
+
+      // Calculate portfolio summary
+      const totalValue = holdings.reduce((sum: number, holding: any) => sum + (holding.current_value || 0), 0);
+      const totalCost = holdings.reduce((sum: number, holding: any) => sum + (holding.total_cost || 0), 0);
+      const totalGainLoss = totalValue - totalCost;
+      const totalGainLossPercent = totalCost > 0 ? (totalGainLoss / totalCost) * 100 : 0;
+
+      const summary = {
+         portfolio: portfolioResult,
+         holdings: holdings,
+         totalValue: totalValue,
+         totalCost: totalCost,
+         totalGainLoss: totalGainLoss,
+         totalGainLossPercent: totalGainLossPercent,
+         lastUpdated: new Date().toISOString()
+      };
+
+      return new Response(JSON.stringify({
+         success: true,
+         summary: summary
+      }), {
+         status: 200,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Failed to fetch portfolio summary'
       }), {
          status: 500,
          headers: { 'Content-Type': 'application/json', ...corsHeaders }

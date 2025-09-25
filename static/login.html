@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <title>Stock Analysis - Login</title>
+   <style>
+      * {
+         box-sizing: border-box;
+      }
+
+      body {
+         font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+         margin: 0;
+         padding: 0;
+         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+         min-height: 100vh;
+         display: flex;
+         align-items: center;
+         justify-content: center;
+         color: #111;
+      }
+
+      .auth-container {
+         background: white;
+         border-radius: 12px;
+         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+         padding: 40px;
+         width: 100%;
+         max-width: 400px;
+         margin: 20px;
+      }
+
+      .auth-header {
+         text-align: center;
+         margin-bottom: 32px;
+      }
+
+      .auth-header h1 {
+         margin: 0 0 8px 0;
+         font-size: 28px;
+         font-weight: 600;
+         color: #1f2937;
+      }
+
+      .auth-header p {
+         margin: 0;
+         color: #6b7280;
+         font-size: 14px;
+      }
+
+      .form-group {
+         margin-bottom: 20px;
+      }
+
+      .form-group label {
+         display: block;
+         margin-bottom: 6px;
+         font-weight: 500;
+         color: #374151;
+         font-size: 14px;
+      }
+
+      .form-input {
+         width: 100%;
+         padding: 12px 16px;
+         border: 2px solid #e5e7eb;
+         border-radius: 8px;
+         font-size: 16px;
+         transition: border-color 0.2s;
+      }
+
+      .form-input:focus {
+         outline: none;
+         border-color: #667eea;
+      }
+
+      .form-input.error {
+         border-color: #ef4444;
+      }
+
+      .btn {
+         width: 100%;
+         padding: 12px 16px;
+         border: none;
+         border-radius: 8px;
+         font-size: 16px;
+         font-weight: 600;
+         cursor: pointer;
+         transition: all 0.2s;
+         margin-bottom: 16px;
+      }
+
+      .btn-primary {
+         background: #667eea;
+         color: white;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+         background: #5a67d8;
+      }
+
+      .btn-secondary {
+         background: transparent;
+         color: #667eea;
+         border: 2px solid #667eea;
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+         background: #667eea;
+         color: white;
+      }
+
+      .btn:disabled {
+         opacity: 0.6;
+         cursor: not-allowed;
+      }
+
+      .error-message {
+         color: #ef4444;
+         background: #fef2f2;
+         border: 1px solid #fecaca;
+         padding: 12px;
+         border-radius: 8px;
+         margin-bottom: 16px;
+         font-size: 14px;
+         display: none;
+      }
+
+      .success-message {
+         color: #059669;
+         background: #ecfdf5;
+         border: 1px solid #a7f3d0;
+         padding: 12px;
+         border-radius: 8px;
+         margin-bottom: 16px;
+         font-size: 14px;
+         display: none;
+      }
+
+      .form-switch {
+         text-align: center;
+         margin-top: 24px;
+         padding-top: 24px;
+         border-top: 1px solid #e5e7eb;
+      }
+
+      .form-switch a {
+         color: #667eea;
+         text-decoration: none;
+         font-weight: 500;
+      }
+
+      .form-switch a:hover {
+         text-decoration: underline;
+      }
+
+      .hidden {
+         display: none;
+      }
+
+      .loading {
+         display: inline-block;
+         width: 16px;
+         height: 16px;
+         border: 2px solid #ffffff;
+         border-radius: 50%;
+         border-top-color: transparent;
+         animation: spin 1s ease-in-out infinite;
+      }
+
+      @keyframes spin {
+         to {
+            transform: rotate(360deg);
+         }
+      }
+
+      .profile-info {
+         background: #f8fafc;
+         border: 1px solid #e2e8f0;
+         border-radius: 8px;
+         padding: 20px;
+         margin-top: 24px;
+      }
+
+      .profile-info h3 {
+         margin: 0 0 16px 0;
+         color: #1f2937;
+         font-size: 18px;
+         font-weight: 600;
+      }
+
+      .profile-details {
+         background: white;
+         border-radius: 6px;
+         padding: 16px;
+         border: 1px solid #e5e7eb;
+      }
+
+      .profile-details p {
+         margin: 8px 0;
+         color: #374151;
+         font-size: 14px;
+      }
+
+      .profile-details strong {
+         color: #1f2937;
+         font-weight: 600;
+      }
+
+      /* Portfolio Management Styles */
+      .dashboard-container {
+         max-width: 1200px;
+         margin: 0 auto;
+         padding: 20px;
+      }
+
+      .dashboard-header {
+         display: flex;
+         justify-content: space-between;
+         align-items: center;
+         margin-bottom: 32px;
+         padding-bottom: 16px;
+         border-bottom: 2px solid #e5e7eb;
+      }
+
+      .dashboard-title {
+         margin: 0;
+         font-size: 32px;
+         font-weight: 700;
+         color: #1f2937;
+      }
+
+      .nav-tabs {
+         display: flex;
+         gap: 8px;
+         margin-bottom: 24px;
+         border-bottom: 1px solid #e5e7eb;
+      }
+
+      .nav-tab {
+         padding: 12px 24px;
+         background: none;
+         border: none;
+         border-bottom: 2px solid transparent;
+         cursor: pointer;
+         font-weight: 500;
+         color: #6b7280;
+         transition: all 0.2s;
+      }
+
+      .nav-tab.active {
+         color: #667eea;
+         border-bottom-color: #667eea;
+      }
+
+      .nav-tab:hover {
+         color: #374151;
+      }
+
+      .tab-content {
+         display: none;
+      }
+
+      .tab-content.active {
+         display: block;
+      }
+
+      .portfolio-grid {
+         display: grid;
+         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+         gap: 24px;
+         margin-bottom: 32px;
+      }
+
+      .portfolio-card {
+         background: white;
+         border-radius: 12px;
+         padding: 24px;
+         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+         border: 1px solid #e5e7eb;
+         transition: all 0.2s;
+      }
+
+      .portfolio-card:hover {
+         box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+         transform: translateY(-2px);
+      }
+
+      .portfolio-header {
+         display: flex;
+         justify-content: space-between;
+         align-items: flex-start;
+         margin-bottom: 16px;
+      }
+
+      .portfolio-name {
+         margin: 0;
+         font-size: 20px;
+         font-weight: 600;
+         color: #1f2937;
+      }
+
+      .portfolio-actions {
+         display: flex;
+         gap: 8px;
+      }
+
+      .btn-small {
+         padding: 6px 12px;
+         font-size: 12px;
+         border-radius: 6px;
+         border: none;
+         cursor: pointer;
+         font-weight: 500;
+         transition: all 0.2s;
+      }
+
+      .btn-edit {
+         background: #f3f4f6;
+         color: #374151;
+      }
+
+      .btn-edit:hover {
+         background: #e5e7eb;
+      }
+
+      .btn-delete {
+         background: #fef2f2;
+         color: #dc2626;
+      }
+
+      .btn-delete:hover {
+         background: #fee2e2;
+      }
+
+      .btn-view {
+         background: #eff6ff;
+         color: #2563eb;
+      }
+
+      .btn-view:hover {
+         background: #dbeafe;
+      }
+
+      .portfolio-description {
+         color: #6b7280;
+         font-size: 14px;
+         margin-bottom: 16px;
+         line-height: 1.5;
+      }
+
+      .portfolio-stats {
+         display: grid;
+         grid-template-columns: 1fr 1fr;
+         gap: 16px;
+         margin-bottom: 16px;
+      }
+
+      .stat-item {
+         text-align: center;
+      }
+
+      .stat-value {
+         font-size: 18px;
+         font-weight: 600;
+         color: #1f2937;
+         margin-bottom: 4px;
+      }
+
+      .stat-label {
+         font-size: 12px;
+         color: #6b7280;
+         text-transform: uppercase;
+         letter-spacing: 0.5px;
+      }
+
+      .form-modal {
+         position: fixed;
+         top: 0;
+         left: 0;
+         right: 0;
+         bottom: 0;
+         background: rgba(0, 0, 0, 0.5);
+         display: none;
+         align-items: center;
+         justify-content: center;
+         z-index: 1000;
+      }
+
+      .form-modal.active {
+         display: flex;
+      }
+
+      .modal-content {
+         background: white;
+         border-radius: 12px;
+         padding: 32px;
+         width: 90%;
+         max-width: 500px;
+         max-height: 90vh;
+         overflow-y: auto;
+      }
+
+      .modal-header {
+         display: flex;
+         justify-content: space-between;
+         align-items: center;
+         margin-bottom: 24px;
+      }
+
+      .modal-title {
+         margin: 0;
+         font-size: 24px;
+         font-weight: 600;
+         color: #1f2937;
+      }
+
+      .modal-close {
+         background: none;
+         border: none;
+         font-size: 24px;
+         cursor: pointer;
+         color: #6b7280;
+         padding: 4px;
+      }
+
+      .modal-close:hover {
+         color: #374151;
+      }
+
+      .holdings-table {
+         width: 100%;
+         border-collapse: collapse;
+         margin-top: 16px;
+      }
+
+      .holdings-table th,
+      .holdings-table td {
+         padding: 12px;
+         text-align: left;
+         border-bottom: 1px solid #e5e7eb;
+      }
+
+      .holdings-table th {
+         background: #f9fafb;
+         font-weight: 600;
+         color: #374151;
+         font-size: 14px;
+      }
+
+      .holdings-table td {
+         font-size: 14px;
+      }
+
+      .positive {
+         color: #059669;
+      }
+
+      .negative {
+         color: #dc2626;
+      }
+
+      .neutral {
+         color: #6b7280;
+      }
+
+      .add-holding-form {
+         display: grid;
+         grid-template-columns: 1fr 1fr;
+         gap: 16px;
+         margin-bottom: 24px;
+      }
+
+      .add-holding-form .form-group {
+         margin-bottom: 0;
+      }
+
+      .add-holding-form .form-group.full-width {
+         grid-column: 1 / -1;
+      }
+
+      .summary-cards {
+         display: grid;
+         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+         gap: 16px;
+         margin-bottom: 24px;
+      }
+
+      .summary-card {
+         background: white;
+         border-radius: 8px;
+         padding: 20px;
+         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+         border: 1px solid #e5e7eb;
+      }
+
+      .summary-card-title {
+         font-size: 14px;
+         color: #6b7280;
+         margin-bottom: 8px;
+         font-weight: 500;
+      }
+
+      .summary-card-value {
+         font-size: 24px;
+         font-weight: 700;
+         color: #1f2937;
+         margin-bottom: 4px;
+      }
+
+      .summary-card-change {
+         font-size: 14px;
+         font-weight: 500;
+      }
+
+      .loading-spinner {
+         display: inline-block;
+         width: 20px;
+         height: 20px;
+         border: 2px solid #f3f4f6;
+         border-radius: 50%;
+         border-top-color: #667eea;
+         animation: spin 1s ease-in-out infinite;
+      }
+
+      .empty-state {
+         text-align: center;
+         padding: 48px 24px;
+         color: #6b7280;
+      }
+
+      .empty-state-icon {
+         font-size: 48px;
+         margin-bottom: 16px;
+      }
+
+      .empty-state h3 {
+         margin: 0 0 8px 0;
+         color: #374151;
+      }
+
+      .empty-state p {
+         margin: 0;
+      }
+   </style>
+</head>
+
+<body>
+   <div class="auth-container">
+      <!-- Login Form -->
+      <div id="loginForm">
+         <div class="auth-header">
+            <h1>Welcome Back</h1>
+            <p>Sign in to your Stock Analysis account</p>
+         </div>
+
+         <div id="errorMessage" class="error-message"></div>
+         <div id="successMessage" class="success-message"></div>
+
+         <form id="loginFormElement">
+            <div class="form-group">
+               <label for="loginEmail">Email Address</label>
+               <input type="email" id="loginEmail" class="form-input" placeholder="Enter your email" required />
+            </div>
+
+            <div class="form-group">
+               <label for="loginPassword">Password</label>
+               <input type="password" id="loginPassword" class="form-input" placeholder="Enter your password"
+                  required />
+            </div>
+
+            <button type="submit" id="loginBtn" class="btn btn-primary">
+               <span id="loginBtnText">Sign In</span>
+               <span id="loginBtnLoading" class="loading hidden"></span>
+            </button>
+         </form>
+
+         <div class="form-switch">
+            <p>Don't have an account? <a href="#" id="showRegisterLink">Sign up</a></p>
+         </div>
+      </div>
+
+      <!-- Registration Form -->
+      <div id="registerForm" class="hidden">
+         <div class="auth-header">
+            <h1>Create Account</h1>
+            <p>Join Stock Analysis to get started</p>
+         </div>
+
+         <div id="registerErrorMessage" class="error-message"></div>
+         <div id="registerSuccessMessage" class="success-message"></div>
+
+         <form id="registerFormElement">
+            <div class="form-group">
+               <label for="registerEmail">Email Address</label>
+               <input type="email" id="registerEmail" class="form-input" placeholder="Enter your email" required />
+            </div>
+
+            <div class="form-group">
+               <label for="registerPassword">Password</label>
+               <input type="password" id="registerPassword" class="form-input" placeholder="Create a password" required
+                  minlength="6" />
+            </div>
+
+            <div class="form-group">
+               <label for="confirmPassword">Confirm Password</label>
+               <input type="password" id="confirmPassword" class="form-input" placeholder="Confirm your password"
+                  required />
+            </div>
+
+            <button type="submit" id="registerBtn" class="btn btn-primary">
+               <span id="registerBtnText">Create Account</span>
+               <span id="registerBtnLoading" class="loading hidden"></span>
+            </button>
+         </form>
+
+         <div class="form-switch">
+            <p>Already have an account? <a href="#" id="showLoginLink">Sign in</a></p>
+         </div>
+      </div>
+   </div>
+
+   <script src="/old_index.js"></script>
+</body>
+
+</html>
