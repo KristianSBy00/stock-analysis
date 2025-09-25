@@ -110,6 +110,7 @@ export default {
                }
                break;
 
+            // '/api/portfolios/{portfolioId}/'
             case path.match(/^\/api\/portfolios\/\d+\//) ? path : 'no-match':
                // Handle portfolio-specific routes with dynamic ID
                if (path.includes('/holdings')) {
@@ -1318,24 +1319,14 @@ async function handleAddStockToPortfolio(request: Request, env: Env): Promise<Re
 
    const { auth } = authResult;
 
-   const data = await request.json();
-   const url = new URL(request.url);
-   const portfolioId = url.pathname.split('/')[3];
-   console.log(data);
-   console.log(portfolioId);
-   return new Response(JSON.stringify({
-      success: true,
-      message: 'Stock added to portfolio successfully'
-   }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-   });
-
    try {
       const url = new URL(request.url);
       const portfolioId = url.pathname.split('/')[3];
       const body = await request.json();
-      const { symbol, quantity, pricePerShare, fees = 0, transactionDate } = body;
+      const { symbol, quantity } = body;
+
+
+      console.log(symbol, quantity);
 
       if (!portfolioId) {
          return new Response(JSON.stringify({
@@ -1347,7 +1338,7 @@ async function handleAddStockToPortfolio(request: Request, env: Env): Promise<Re
          });
       }
 
-      if (!symbol || !quantity || !pricePerShare || !transactionDate) {
+      if (!symbol || !quantity ) {
          return new Response(JSON.stringify({
             success: false,
             message: 'Symbol, quantity, price per share, and transaction date are required'
@@ -1373,48 +1364,10 @@ async function handleAddStockToPortfolio(request: Request, env: Env): Promise<Re
          });
       }
 
-      const totalAmount = quantity * pricePerShare;
-
-      // Add transaction record
-      const transactionResult = await env.stock_analysis.prepare(`
-         INSERT INTO portfolio_transactions (portfolio_id, symbol, transaction_type, quantity, price_per_share, total_amount, fees, transaction_date)
-         VALUES (?, ?, 'BUY', ?, ?, ?, ?, ?)
-      `).bind(portfolioId, symbol, quantity, pricePerShare, totalAmount, fees, transactionDate).run();
-
-      if (!transactionResult.success) {
-         return new Response(JSON.stringify({
-            success: false,
-            message: 'Failed to add transaction'
-         }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json', ...corsHeaders }
-         });
-      }
-
-      // Check if holding already exists
-      const existingHolding = await env.stock_analysis.prepare(`
-         SELECT * FROM portfolio_holdings
-         WHERE portfolio_id = ? AND symbol = ?
-      `).bind(portfolioId, symbol).first();
-
-      if (existingHolding) {
-         // Update existing holding
-         const newQuantity = existingHolding.quantity + quantity;
-         const newTotalCost = existingHolding.total_cost + totalAmount;
-         const newAverageCost = newTotalCost / newQuantity;
-
-         await env.stock_analysis.prepare(`
-            UPDATE portfolio_holdings
-            SET quantity = ?, average_cost = ?, total_cost = ?, last_updated = CURRENT_TIMESTAMP
-            WHERE portfolio_id = ? AND symbol = ?
-         `).bind(newQuantity, newAverageCost, newTotalCost, portfolioId, symbol).run();
-      } else {
-         // Create new holding
-         await env.stock_analysis.prepare(`
+      await env.stock_analysis.prepare(`
             INSERT INTO portfolio_holdings (portfolio_id, symbol, quantity, average_cost, total_cost, last_updated)
             VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-         `).bind(portfolioId, symbol, quantity, pricePerShare, totalAmount).run();
-      }
+         `).bind(portfolioId, symbol, quantity, 0, 0).run();
 
       return new Response(JSON.stringify({
          success: true,

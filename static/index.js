@@ -77,3 +77,18 @@ async function addCompanyToPortfolio() {
       }),
    });
 }
+
+async function getPortfolioHoldings() {
+   const token = localStorage.getItem('authToken');
+   const portfolioId = document.getElementById('portfolioId').value;
+   const response = await fetch(`/api/portfolios/${portfolioId}/holdings`, {
+      method: 'GET',
+      headers: {
+         'Authorization': `Bearer ${token}`,
+         'Content-Type': 'application/json',
+      }
+   });
+
+   const data = await response.json();
+   console.log(data);
+}
