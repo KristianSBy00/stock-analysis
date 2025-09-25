@@ -21,7 +21,6 @@ const corsHeaders = {
    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-
 export default {
    async scheduled(
       controller: ScheduledController,
@@ -282,20 +281,6 @@ export default {
                   const toParam = url.searchParams.get('to');
                   const fromParam = url.searchParams.get('from');
                   return await getFinnhubInsiderTransactions(symbol, env, { from: fromParam, to: toParam });
-               }
-               break;
-
-            case '/api/api-ninjas/sp500':
-               if (method === 'GET') {
-
-                  const response = await getApiNinjasSp500(env);
-                  const data = await response.json();
-                  const stockAnalysisDB = new StockAnalysisDB(env.API_NINJAS_API_KEY!);
-                  await stockAnalysisDB.storeSp500Tickers(env, data, true);
-                  return new Response(JSON.stringify(data), {
-                     status: 200,
-                     headers: { 'Content-Type': 'application/json', ...corsHeaders }
-                  });
                }
                break;
 
@@ -1252,7 +1237,7 @@ async function handleGetPortfolioHoldings(request: Request, env: Env): Promise<R
 
    try {
       const url = new URL(request.url);
-      const portfolioId = url.pathname.split('/')[3]; // Extract portfolio ID from /api/portfolios/{id}/holdings
+      const portfolioId = parseInt(url.pathname.split('/')[3]); // Extract portfolio ID from /api/portfolios/{id}/holdings
 
       if (!portfolioId) {
          return new Response(JSON.stringify({
@@ -1265,12 +1250,9 @@ async function handleGetPortfolioHoldings(request: Request, env: Env): Promise<R
       }
 
       // Verify portfolio belongs to user
-      const portfolioResult = await env.stock_analysis.prepare(`
-         SELECT id FROM user_portfolios
-         WHERE id = ? AND user_id = ?
-      `).bind(portfolioId, auth.user.id).first();
+      const isUsersPortfolio = await StockAnalysisDB.isUsersPortfolio(env, portfolioId, auth.user.id);
 
-      if (!portfolioResult) {
+      if (!isUsersPortfolio) {
          return new Response(JSON.stringify({
             success: false,
             message: 'Portfolio not found'
@@ -1281,21 +1263,18 @@ async function handleGetPortfolioHoldings(request: Request, env: Env): Promise<R
       }
 
       // Get portfolio holdings
-      const holdingsResult = await env.stock_analysis.prepare(`
-         SELECT * FROM portfolio_holdings
-         WHERE portfolio_id = ?
-         ORDER BY symbol ASC
-      `).bind(portfolioId).all();
+      const holdingsResult = await StockAnalysisDB.getPortfolioHoldings(env, portfolioId);
 
       return new Response(JSON.stringify({
          success: true,
-         holdings: holdingsResult.results
+         holdings: holdingsResult
       }), {
          status: 200,
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
 
-   } catch (error) {
+   }
+   catch (error) {
       return new Response(JSON.stringify({
          success: false,
          message: 'Failed to fetch portfolio holdings'
@@ -1321,12 +1300,9 @@ async function handleAddStockToPortfolio(request: Request, env: Env): Promise<Re
 
    try {
       const url = new URL(request.url);
-      const portfolioId = url.pathname.split('/')[3];
+      const portfolioId = parseInt(url.pathname.split('/')[3]);
       const body = await request.json();
       const { symbol, quantity } = body;
-
-
-      console.log(symbol, quantity);
 
       if (!portfolioId) {
          return new Response(JSON.stringify({
@@ -1349,12 +1325,9 @@ async function handleAddStockToPortfolio(request: Request, env: Env): Promise<Re
       }
 
       // Verify portfolio belongs to user
-      const portfolioResult = await env.stock_analysis.prepare(`
-         SELECT id FROM user_portfolios
-         WHERE id = ? AND user_id = ?
-      `).bind(portfolioId, auth.user.id).first();
+      const isUsersPortfolio = await StockAnalysisDB.isUsersPortfolio(env, portfolioId, auth.user.id);
 
-      if (!portfolioResult) {
+      if (!isUsersPortfolio) {
          return new Response(JSON.stringify({
             success: false,
             message: 'Portfolio not found'
@@ -1364,14 +1337,14 @@ async function handleAddStockToPortfolio(request: Request, env: Env): Promise<Re
          });
       }
 
-      await env.stock_analysis.prepare(`
-            INSERT INTO portfolio_holdings (portfolio_id, symbol, quantity, average_cost, total_cost, last_updated)
-            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-         `).bind(portfolioId, symbol, quantity, 0, 0).run();
+      await StockAnalysisDB.addPortfolioHolding(env, portfolioId, symbol, quantity);
+
+      // Get portfolio holdings
+      const holdingsResult = await StockAnalysisDB.getPortfolioHoldings(env, portfolioId);
 
       return new Response(JSON.stringify({
          success: true,
-         message: 'Stock added to portfolio successfully'
+         holdings: holdingsResult
       }), {
          status: 201,
          headers: { 'Content-Type': 'application/json', ...corsHeaders }

@@ -3,18 +3,9 @@
  * Handles storage and retrieval of insider transactions and other stock data
  */
 
-import { InsiderTransaction, Env } from './types';
+import { InsiderTransaction, Env, PortfolioHolding } from './types';
 
-export class StockAnalysisDB {
-   private readonly apiKey: string;
-
-   constructor(apiKey: string) {
-      if (!apiKey) {
-         throw new Error('StockAnalysisDB requires a valid API key');
-      }
-      this.apiKey = apiKey;
-   }
-
+export abstract class StockAnalysisDB {
    /**
     * Store an insider transaction in the database
     * @param env - Cloudflare Workers environment containing database binding
@@ -130,7 +121,8 @@ export class StockAnalysisDB {
          }
 
          console.log(`Successfully stored ${tickers.length} S&P 500 tickers using individual upserts in ${batches.length} batches`);
-      } catch (error) {
+      }
+      catch (error) {
          console.error('Failed to store S&P 500 tickers:', error);
          throw new Error(`Database operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
@@ -149,7 +141,8 @@ export class StockAnalysisDB {
          `).all();
 
          return result.results.map((row: any) => row.ticker);
-      } catch (error) {
+      }
+      catch (error) {
          console.error('Failed to retrieve S&P 500 tickers:', error);
          throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
@@ -168,7 +161,8 @@ export class StockAnalysisDB {
          `).bind(ticker).all();
 
          return result.results.length > 0;
-      } catch (error) {
+      }
+      catch (error) {
          console.error('Failed to check S&P 500 ticker:', error);
          throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
@@ -183,14 +177,15 @@ export class StockAnalysisDB {
 
          await env.stock_analysis.prepare(`
             INSERT INTO insider_transactions (symbol, insider_name, transaction_date, shares)
-            VALUES (?, ?, ?, ?)
-         `).bind(
+            VALUES (?, ?, ?, ?)`
+         ).bind(
             transaction.symbol,
             transaction.insiderName,
             transaction.transactionDate,
             transaction.shares
          ).run();
-      } catch (error) {
+      }
+      catch (error) {
          console.error('Failed to store insider transaction:', error);
          throw new Error(`Database operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
@@ -212,7 +207,8 @@ export class StockAnalysisDB {
          `).bind(symbol).all();
 
          return result.results as InsiderTransaction[];
-      } catch (error) {
+      }
+      catch (error) {
          console.error('Failed to retrieve insider transactions:', error);
          throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
@@ -234,8 +230,51 @@ export class StockAnalysisDB {
          `).bind(limit).all();
 
          return result.results as InsiderTransaction[];
-      } catch (error) {
+      }
+      catch (error) {
          console.error('Failed to retrieve all insider transactions:', error);
+         throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+   }
+
+   static async getPortfolioHoldings(env: Env, portfolioId: number): Promise<PortfolioHolding[]> {
+      try {
+         const result = await env.stock_analysis.prepare(`
+            SELECT * FROM portfolio_holdings WHERE portfolio_id = ?
+         `).bind(portfolioId).all();
+
+         return result.results as PortfolioHolding[];
+      }
+      catch (error) {
+         console.error('Failed to retrieve portfolio holdings:', error);
+         throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+   }
+
+   static async addPortfolioHolding(env: Env, portfolioId: number, symbol: string, quantity: number): Promise<void> {
+      try {
+         await env.stock_analysis.prepare(`
+            INSERT INTO portfolio_holdings (portfolio_id, symbol, quantity, average_cost, total_cost, last_updated)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+         `).bind(portfolioId, symbol, quantity, 0, 0).run();
+
+      }
+      catch (error) {
+         console.error('Failed to retrieve portfolio holdings:', error);
+         throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+   }
+
+   static async isUsersPortfolio(env: Env, portfolioId: number, userId: number): Promise<boolean> {
+      try {
+         const result = await env.stock_analysis.prepare(`
+            SELECT * FROM user_portfolios WHERE id = ? AND user_id = ?
+         `).bind(portfolioId, userId).all();
+
+         return result.results.length > 0;
+      }
+      catch (error) {
+         console.error('Failed to check if users portfolio:', error);
          throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
    }

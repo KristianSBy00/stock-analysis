@@ -76,6 +76,9 @@ async function addCompanyToPortfolio() {
          quantity: quantity,
       }),
    });
+
+   const data = await response.json();
+   console.log(data);
 }
 
 async function getPortfolioHoldings() {
