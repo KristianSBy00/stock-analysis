@@ -110,8 +110,7 @@ export default {
                }
                break;
 
-            case '/api/portfolios/':
-               console.log(request);
+            case path.match(/^\/api\/portfolios\/\d+\//) ? path : 'no-match':
                // Handle portfolio-specific routes with dynamic ID
                if (path.includes('/holdings')) {
                   if (method === 'GET') {
@@ -1318,6 +1317,19 @@ async function handleAddStockToPortfolio(request: Request, env: Env): Promise<Re
    }
 
    const { auth } = authResult;
+
+   const data = await request.json();
+   const url = new URL(request.url);
+   const portfolioId = url.pathname.split('/')[3];
+   console.log(data);
+   console.log(portfolioId);
+   return new Response(JSON.stringify({
+      success: true,
+      message: 'Stock added to portfolio successfully'
+   }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+   });
 
    try {
       const url = new URL(request.url);

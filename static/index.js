@@ -59,3 +59,21 @@ async function getPortfolios() {
    const data = await response.json();
    console.log(data);
 }
+
+async function addCompanyToPortfolio() {
+   const token = localStorage.getItem('authToken');
+   const portfolioId = document.getElementById('portfolioId').value;
+   const symbol = document.getElementById('symbolId').value;
+   const quantity = document.getElementById('quantityId').value;
+   const response = await fetch(`/api/portfolios/${portfolioId}/holdings`, {
+      method: 'POST',
+      headers: {
+         'Authorization': `Bearer ${token}`,
+         'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+         symbol: symbol,
+         quantity: quantity,
+      }),
+   });
+}
