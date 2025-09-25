@@ -3,11 +3,11 @@
  * Handles HTTP requests and provides basic stock analysis functionality
  */
 
-import yahooFinance from 'yahoo-finance2';
 import { ApiClient, ApiProvider } from './apiClient';
 import { Resend } from 'resend';
 import { StockAnalysisDB } from './stockAnalasysDB';
-import { Env } from './types';
+import { Env, LoginRequest, RegisterRequest } from './types';
+import { AuthMiddleware } from './authMiddleware';
 
 declare type ExecutionContext = any;
 declare type ScheduledController = any;
@@ -55,8 +55,74 @@ export default {
       const method = request.method;
 
       try {
+         // Handle CORS preflight
+         const corsResponse = new AuthMiddleware(env).handleCors(request);
+         if (corsResponse) {
+            return corsResponse;
+         }
+
          // Route handling
          switch (path) {
+
+            // ============================================================================
+            // Authentication Routes
+            // ============================================================================
+
+            case '/auth/register':
+               if (method === 'POST') {
+                  return await handleRegister(request, env);
+               }
+               break;
+
+            case '/auth/login':
+               if (method === 'POST') {
+                  return await handleLogin(request, env);
+               }
+               break;
+
+            case '/auth/logout':
+               if (method === 'POST') {
+                  return await handleLogout(request, env);
+               }
+               break;
+
+            case '/auth/me':
+               if (method === 'GET') {
+                  return await handleGetProfile(request, env);
+               }
+               break;
+
+            case '/auth/verify':
+               if (method === 'POST') {
+                  return await handleVerifyToken(request, env);
+               }
+               break;
+
+            // ============================================================================
+            // Portfolio Routes (Protected)
+            // ============================================================================
+
+            case '/api/portfolios':
+               if (method === 'GET') {
+                  return await handleGetPortfolios(request, env);
+               } else if (method === 'POST') {
+                  return await handleCreatePortfolio(request, env);
+               }
+               break;
+
+            case '/api/portfolios/':
+               if (method === 'GET') {
+                  return await handleGetPortfolio(request, env);
+               } else if (method === 'PUT') {
+                  return await handleUpdatePortfolio(request, env);
+               } else if (method === 'DELETE') {
+                  return await handleDeletePortfolio(request, env);
+               }
+               break;
+
+            // ============================================================================
+            // Public API Routes
+            // ============================================================================
 
             case '/send_email':
                console.log(env.MY_GMAIL_ADDRESS as string);
@@ -149,6 +215,23 @@ export default {
                if (method === 'GET') {
                   const symbol = url.searchParams.get('symbol') || 'AAPL';
                   return await getYahooStockData(symbol, env);
+               }
+               break;
+
+            case '/api/dividends':
+               if (method === 'GET') {
+                  const symbol = url.searchParams.get('symbol') || 'AAPL';
+                  const fromParam = url.searchParams.get('from');
+                  const toParam = url.searchParams.get('to');
+                  return await getStockDividends(symbol, env, { from: fromParam, to: toParam });
+               }
+               break;
+
+            case '/api/quote':
+               if (method === 'GET') {
+                  const symbol = url.searchParams.get('symbol') || 'AAPL';
+                  const provider = url.searchParams.get('provider') as 'finnhub' | 'api_ninjas' | 'yahoo_finance' | undefined;
+                  return await getUnifiedQuote(symbol, env, provider);
                }
                break;
 
@@ -247,63 +330,17 @@ export default {
 };
 
 /**
- * Get stock data from Yahoo Finance
+ * Get stock data from Yahoo Finance using ApiClient
  */
-async function getYahooStockData(symbol: string, env: { FINNHUB_API_KEY?: string }): Promise<Response> {
+async function getYahooStockData(symbol: string, env: Env): Promise<Response> {
    try {
-      // Yahoo Finance API endpoint with proper headers
-      const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol.toUpperCase()}`;
-
-      const headers: Record<string, string> = {
-         'Accept': 'application/json',
-      };
-
-      // Add timeout to prevent hanging
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-      const response = await fetch(yahooUrl, {
-         headers,
-         signal: controller.signal
+      const apiClient = new ApiClient({
+         finnhubApiKey: env.FINNHUB_API_KEY,
+         apiNinjasApiKey: env.API_NINJAS_API_KEY,
+         secApiKey: env.SEC_API_KEY
       });
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-         throw new Error(`Yahoo Finance API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-
-      // Check if we have valid data
-      if (!data.chart || !data.chart.result || data.chart.result.length === 0) {
-         throw new Error('No data available for symbol: ' + symbol);
-      }
-
-      // Extract relevant data from Yahoo Finance response
-      const chart = data.chart.result[0];
-      const meta = chart.meta;
-
-      if (!meta) {
-         throw new Error('Invalid data structure from Yahoo Finance');
-      }
-
-      const stockData = {
-         symbol: meta.symbol || symbol.toUpperCase(),
-         name: meta.longName || meta.shortName || `${symbol.toUpperCase()} Corporation`,
-         price: meta.regularMarketPrice || meta.previousClose || 0,
-         change: (meta.regularMarketPrice || meta.previousClose || 0) - (meta.previousClose || 0),
-         changePercent: meta.previousClose ?
-            (((meta.regularMarketPrice || meta.previousClose) - meta.previousClose) / meta.previousClose) * 100 : 0,
-         volume: meta.regularMarketVolume || 0,
-         marketCap: meta.marketCap || 0,
-         currency: meta.currency || 'USD',
-         exchange: meta.exchangeName || 'Unknown',
-         lastUpdated: meta.regularMarketTime ?
-            new Date(meta.regularMarketTime * 1000).toISOString() :
-            new Date().toISOString(),
-         source: 'Yahoo Finance'
-      };
+      const stockData = await apiClient.getYahooFinanceQuote(symbol);
 
       return new Response(JSON.stringify(stockData), {
          status: 200,
@@ -314,24 +351,86 @@ async function getYahooStockData(symbol: string, env: { FINNHUB_API_KEY?: string
       });
 
    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const isTimeout = error instanceof Error && error.name === 'AbortError';
+      const errorResponse = ApiClient.createYahooFinanceErrorResponse(error, 'fetch quote', symbol);
 
-      console.error('Error fetching Yahoo Finance data:', {
-         symbol: symbol.toUpperCase(),
-         error: errorMessage,
-         isTimeout,
-         timestamp: new Date().toISOString()
+      return new Response(JSON.stringify(errorResponse), {
+         status: errorResponse.status,
+         headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+         }
+      });
+   }
+}
+
+/**
+ * Get unified quote from any available provider using ApiClient
+ */
+async function getUnifiedQuote(symbol: string, env: Env, provider?: 'finnhub' | 'api_ninjas' | 'yahoo_finance'): Promise<Response> {
+   try {
+      const apiClient = new ApiClient({
+         finnhubApiKey: env.FINNHUB_API_KEY,
+         apiNinjasApiKey: env.API_NINJAS_API_KEY,
+         secApiKey: env.SEC_API_KEY
       });
 
+      const quoteData = await apiClient.getQuote(symbol, provider as any);
+
       return new Response(JSON.stringify({
-         error: isTimeout ? 'Request timeout' : 'Failed to fetch stock data from Yahoo Finance',
-         message: isTimeout ? 'The request took too long to complete' : errorMessage,
          symbol: symbol.toUpperCase(),
-         source: 'Yahoo Finance',
-         timeout: isTimeout
+         source: 'ApiClient (Unified)',
+         ...quoteData
       }), {
-         status: isTimeout ? 408 : 500,
+         status: 200,
+         headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+         }
+      });
+
+   } catch (error) {
+      const errorResponse = ApiClient.createErrorResponse(error, 'fetch quote', 'Unified API', symbol);
+
+      return new Response(JSON.stringify(errorResponse), {
+         status: errorResponse.status,
+         headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+         }
+      });
+   }
+}
+
+/**
+ * Get stock dividend information using ApiClient
+ */
+async function getStockDividends(
+   symbol: string,
+   env: Env,
+   range?: { from?: string | null; to?: string | null }
+): Promise<Response> {
+   try {
+      const apiClient = new ApiClient({
+         finnhubApiKey: env.FINNHUB_API_KEY,
+         apiNinjasApiKey: env.API_NINJAS_API_KEY,
+         secApiKey: env.SEC_API_KEY
+      });
+
+      const dividendData = await apiClient.getYahooFinanceDividends(symbol, range);
+
+      return new Response(JSON.stringify(dividendData), {
+         status: 200,
+         headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+         }
+      });
+
+   } catch (error) {
+      const errorResponse = ApiClient.createYahooFinanceErrorResponse(error, 'fetch dividends', symbol);
+
+      return new Response(JSON.stringify(errorResponse), {
+         status: errorResponse.status,
          headers: {
             'Content-Type': 'application/json',
             ...corsHeaders
@@ -617,6 +716,493 @@ async function getApiNinjasProfile(symbol: string, env: { API_NINJAS_API_KEY?: s
 
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+// ============================================================================
+// Authentication Handler Functions
+// ============================================================================
+
+/**
+ * Handle user registration
+ */
+async function handleRegister(request: Request, env: Env): Promise<Response> {
+   try {
+      console.log('Register request received');
+      console.log('Environment check - JWT_SECRET exists:', !!env.JWT_SECRET);
+      console.log('Environment check - stock_analysis DB exists:', !!env.stock_analysis);
+
+      const body = await request.json() as RegisterRequest;
+      console.log('Request body parsed successfully:', { email: body.email, hasPassword: !!body.password });
+
+      // Validate required fields
+      if (!body.email || !body.password) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Email and password are required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(body.email)) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Invalid email format'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Validate password strength
+      if (body.password.length < 8) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Password must be at least 8 characters long'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      console.log('Creating AuthManager...');
+      const authManager = new AuthMiddleware(env).getAuthManager();
+      console.log('AuthManager created successfully');
+
+      console.log('Calling authManager.register...');
+      const result = await authManager.register(body);
+      console.log('Registration result:', result);
+
+      return new Response(JSON.stringify(result), {
+         status: result.success ? 201 : 400,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      console.error('Register function error:', error);
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Invalid request format'
+      }), {
+         status: 400,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+/**
+ * Handle user login
+ */
+async function handleLogin(request: Request, env: Env): Promise<Response> {
+   try {
+      const body = await request.json() as LoginRequest;
+
+      // Validate required fields
+      if (!body.email || !body.password) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Email and password are required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      const authManager = new AuthMiddleware(env).getAuthManager();
+      const userAgent = request.headers.get('User-Agent') || undefined;
+      const ipAddress = request.headers.get('CF-Connecting-IP') || undefined;
+
+      const result = await authManager.login(body, userAgent, ipAddress);
+
+      return new Response(JSON.stringify(result), {
+         status: result.success ? 200 : 401,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Invalid request format'
+      }), {
+         status: 400,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+/**
+ * Handle user logout
+ */
+async function handleLogout(request: Request, env: Env): Promise<Response> {
+   try {
+      const authHeader = request.headers.get('Authorization');
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+
+      if (!token) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'No token provided'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      const authManager = new AuthMiddleware(env).getAuthManager();
+      const success = await authManager.logout(token);
+
+      return new Response(JSON.stringify({
+         success,
+         message: success ? 'Logged out successfully' : 'Logout failed'
+      }), {
+         status: success ? 200 : 400,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Logout failed'
+      }), {
+         status: 500,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+/**
+ * Handle get user profile
+ */
+async function handleGetProfile(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const authResult = await authMiddleware.requireAuth(request);
+
+   if (authResult instanceof Response) {
+      return authResult;
+   }
+
+   const { auth } = authResult;
+
+   return new Response(JSON.stringify({
+      success: true,
+      user: auth.user
+   }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+   });
+}
+
+/**
+ * Handle token verification
+ */
+async function handleVerifyToken(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const auth = await authMiddleware.authenticate(request);
+
+   return new Response(JSON.stringify({
+      success: !!auth,
+      isAuthenticated: !!auth,
+      user: auth?.user || null
+   }), {
+      status: auth ? 200 : 401,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+   });
+}
+
+// ============================================================================
+// Portfolio Handler Functions (Protected Routes)
+// ============================================================================
+
+/**
+ * Handle get user portfolios
+ */
+async function handleGetPortfolios(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const authResult = await authMiddleware.requireAuth(request);
+
+   if (authResult instanceof Response) {
+      return authResult;
+   }
+
+   const { auth } = authResult;
+
+   try {
+      // Get portfolios for the authenticated user
+      const result = await env.stock_analysis.prepare(`
+         SELECT * FROM user_portfolios
+         WHERE user_id = ?
+         ORDER BY created_at DESC
+      `).bind(auth.user.id).all();
+
+      return new Response(JSON.stringify({
+         success: true,
+         portfolios: result.results
+      }), {
+         status: 200,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Failed to fetch portfolios'
+      }), {
+         status: 500,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+/**
+ * Handle create portfolio
+ */
+async function handleCreatePortfolio(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const authResult = await authMiddleware.requireAuth(request);
+
+   if (authResult instanceof Response) {
+      return authResult;
+   }
+
+   const { auth } = authResult;
+
+   try {
+      const body = await request.json();
+      const { portfolioName, description } = body;
+
+      if (!portfolioName) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio name is required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      const result = await env.stock_analysis.prepare(`
+         INSERT INTO user_portfolios (user_id, portfolio_name, description)
+         VALUES (?, ?, ?)
+      `).bind(auth.user.id, portfolioName, description || null).run();
+
+      if (!result.success) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Failed to create portfolio'
+         }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      return new Response(JSON.stringify({
+         success: true,
+         message: 'Portfolio created successfully',
+         portfolioId: result.meta.last_row_id
+      }), {
+         status: 201,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Failed to create portfolio'
+      }), {
+         status: 500,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+/**
+ * Handle get single portfolio
+ */
+async function handleGetPortfolio(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const authResult = await authMiddleware.requireAuth(request);
+
+   if (authResult instanceof Response) {
+      return authResult;
+   }
+
+   const { auth } = authResult;
+
+   try {
+      const url = new URL(request.url);
+      const portfolioId = url.pathname.split('/').pop();
+
+      if (!portfolioId) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio ID is required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      const result = await env.stock_analysis.prepare(`
+         SELECT * FROM user_portfolios
+         WHERE id = ? AND user_id = ?
+      `).bind(portfolioId, auth.user.id).first();
+
+      if (!result) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio not found'
+         }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      return new Response(JSON.stringify({
+         success: true,
+         portfolio: result
+      }), {
+         status: 200,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Failed to fetch portfolio'
+      }), {
+         status: 500,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+/**
+ * Handle update portfolio
+ */
+async function handleUpdatePortfolio(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const authResult = await authMiddleware.requireAuth(request);
+
+   if (authResult instanceof Response) {
+      return authResult;
+   }
+
+   const { auth } = authResult;
+
+   try {
+      const url = new URL(request.url);
+      const portfolioId = url.pathname.split('/').pop();
+      const body = await request.json();
+      const { portfolioName, description } = body;
+
+      if (!portfolioId) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio ID is required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      const result = await env.stock_analysis.prepare(`
+         UPDATE user_portfolios
+         SET portfolio_name = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND user_id = ?
+      `).bind(portfolioName, description || null, portfolioId, auth.user.id).run();
+
+      if (!result.success) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Failed to update portfolio'
+         }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      return new Response(JSON.stringify({
+         success: true,
+         message: 'Portfolio updated successfully'
+      }), {
+         status: 200,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Failed to update portfolio'
+      }), {
+         status: 500,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
+}
+
+/**
+ * Handle delete portfolio
+ */
+async function handleDeletePortfolio(request: Request, env: Env): Promise<Response> {
+   const authMiddleware = new AuthMiddleware(env);
+   const authResult = await authMiddleware.requireAuth(request);
+
+   if (authResult instanceof Response) {
+      return authResult;
+   }
+
+   const { auth } = authResult;
+
+   try {
+      const url = new URL(request.url);
+      const portfolioId = url.pathname.split('/').pop();
+
+      if (!portfolioId) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Portfolio ID is required'
+         }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      const result = await env.stock_analysis.prepare(`
+         DELETE FROM user_portfolios
+         WHERE id = ? AND user_id = ?
+      `).bind(portfolioId, auth.user.id).run();
+
+      if (!result.success) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Failed to delete portfolio'
+         }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      return new Response(JSON.stringify({
+         success: true,
+         message: 'Portfolio deleted successfully'
+      }), {
+         status: 200,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+
+   } catch (error) {
+      return new Response(JSON.stringify({
+         success: false,
+         message: 'Failed to delete portfolio'
+      }), {
+         status: 500,
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
    }

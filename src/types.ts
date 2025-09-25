@@ -16,6 +16,7 @@ declare global {
       bind(...values: any[]): D1PreparedStatement;
       run(): Promise<D1Result>;
       all(): Promise<D1Result>;
+      first(): Promise<any>;
    }
 
    interface D1Result {
@@ -41,6 +42,7 @@ export interface Env {
    MY_GMAIL_ADDRESS?: string;
    ENVIRONMENT?: string;
    SEC_API_KEY?: string;
+   JWT_SECRET?: string;
 }
 
 // ============================================================================
@@ -153,6 +155,213 @@ export interface FinnhubInsiderTransaction {
 export interface FinnhubInsiderTransactionsResponse {
    symbol?: string;
    data?: FinnhubInsiderTransaction[];
+}
+
+// ============================================================================
+// Yahoo Finance Types
+// ============================================================================
+
+export interface YahooFinanceQuote {
+   symbol: string;
+   name: string;
+   price: number;
+   change: number;
+   changePercent: number;
+   volume: number;
+   marketCap: number;
+   currency: string;
+   exchange: string;
+   lastUpdated: string;
+   source: string;
+}
+
+export interface YahooFinanceChartData {
+   chart: {
+      result: Array<{
+         meta: {
+            symbol: string;
+            longName?: string;
+            shortName?: string;
+            regularMarketPrice?: number;
+            previousClose?: number;
+            regularMarketVolume?: number;
+            marketCap?: number;
+            currency?: string;
+            exchangeName?: string;
+            regularMarketTime?: number;
+         };
+      }>;
+   };
+}
+
+export interface DividendData {
+   date: string;
+   amount: number;
+   currency: string;
+}
+
+export interface YahooFinanceDividendResponse {
+   symbol: string;
+   name: string;
+   currency: string;
+   dividends: DividendData[];
+   totalDividends: number;
+   averageDividend: number;
+   lastDividendDate?: string;
+   nextDividendDate?: string;
+   dividendYield?: number;
+   source: string;
+}
+
+// ============================================================================
+// Authentication Types
+// ============================================================================
+
+export interface User {
+   id: number;
+   email: string;
+   firstName?: string;
+   lastName?: string;
+   isActive: boolean;
+   emailVerified: boolean;
+   createdAt: string;
+   updatedAt: string;
+   lastLogin?: string;
+}
+
+export interface UserSession {
+   id: number;
+   userId: number;
+   tokenId: string;
+   expiresAt: string;
+   createdAt: string;
+   isRevoked: boolean;
+   userAgent?: string;
+   ipAddress?: string;
+}
+
+export interface LoginRequest {
+   email: string;
+   password: string;
+}
+
+export interface RegisterRequest {
+   email: string;
+   password: string;
+   firstName?: string;
+   lastName?: string;
+}
+
+export interface AuthResponse {
+   success: boolean;
+   user?: User;
+   token?: string;
+   message?: string;
+   expiresAt?: string;
+}
+
+export interface PasswordResetRequest {
+   email: string;
+}
+
+export interface PasswordResetConfirmRequest {
+   token: string;
+   newPassword: string;
+}
+
+export interface EmailVerificationRequest {
+   token: string;
+}
+
+export interface JWTPayload {
+   sub: number; // user ID
+   email: string;
+   jti: string; // JWT ID for session management
+   iat: number; // issued at
+   exp: number; // expires at
+   type: 'access' | 'refresh';
+}
+
+export interface AuthContext {
+   user: User;
+   session: UserSession;
+   isAuthenticated: boolean;
+}
+
+// ============================================================================
+// Portfolio Types
+// ============================================================================
+
+export interface UserPortfolio {
+   id: number;
+   userId: number;
+   portfolioName: string;
+   description?: string;
+   createdAt: string;
+   updatedAt: string;
+}
+
+export interface PortfolioHolding {
+   id: number;
+   portfolioId: number;
+   symbol: string;
+   quantity: number;
+   averageCost: number;
+   totalCost: number;
+   currentPrice?: number;
+   currentValue?: number;
+   unrealizedGainLoss?: number;
+   unrealizedGainLossPercent?: number;
+   lastUpdated: string;
+   createdAt: string;
+}
+
+export interface PortfolioTransaction {
+   id: number;
+   portfolioId: number;
+   symbol: string;
+   transactionType: 'BUY' | 'SELL' | 'DIVIDEND' | 'SPLIT';
+   quantity: number; // Positive for BUY, negative for SELL
+   pricePerShare: number;
+   totalAmount: number;
+   fees: number;
+   transactionDate: string; // YYYY-MM-DD format
+   notes?: string;
+   createdAt: string;
+}
+
+export interface PortfolioSummary {
+   portfolio: UserPortfolio;
+   holdings: PortfolioHolding[];
+   totalValue: number;
+   totalCost: number;
+   totalGainLoss: number;
+   totalGainLossPercent: number;
+   lastUpdated: string;
+}
+
+export interface CreatePortfolioRequest {
+   userId: string;
+   portfolioName: string;
+   description?: string;
+   isDefault?: boolean;
+}
+
+export interface AddTransactionRequest {
+   portfolioId: number;
+   symbol: string;
+   transactionType: 'BUY' | 'SELL' | 'DIVIDEND' | 'SPLIT';
+   quantity: number;
+   pricePerShare: number;
+   fees?: number;
+   transactionDate: string;
+   notes?: string;
+}
+
+export interface UpdateHoldingRequest {
+   portfolioId: number;
+   symbol: string;
+   currentPrice: number;
 }
 
 // ============================================================================
