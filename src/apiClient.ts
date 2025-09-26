@@ -600,4 +600,24 @@ export class ApiClient {
          symbol: result.symbol || symbol
       };
    }
+
+
+   static async streamStockValue(symbol: string, finnhubApiKey: string): Promise<WebSocket> {
+      const socket = new WebSocket(`wss://ws.finnhub.io?token=${finnhubApiKey}`);
+
+      return new Promise((resolve, reject) => {
+         socket.addEventListener('open', () => {
+            console.log('Connected to Finnhub');
+            socket.send(JSON.stringify({
+               type: 'subscribe',
+               symbol: symbol.toUpperCase()
+            }));
+            resolve(socket);
+         });
+
+         socket.addEventListener('error', (error) => {
+            reject(error);
+         });
+      });
+   }
 }

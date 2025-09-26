@@ -94,4 +94,27 @@ async function getPortfolioHoldings() {
 
    const data = await response.json();
    console.log(data);
+
+   var totalValue = 0;
+
+   for (const holding of data.holdings) {
+      const stockValue = await getStockValue(holding.symbol) * holding.quantity;
+      console.log(stockValue);
+      totalValue += stockValue;
+   }
+
+   console.log(totalValue);
+}
+
+
+async function getStockValue(stockTicker) {
+   const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${stockTicker}`, {
+      method: 'GET',
+      headers: {
+         'Content-Type': 'application/json',
+      }
+   });
+
+   const data = await response.json();
+   return data.chart.result[0].meta.regularMarketPrice;
 }

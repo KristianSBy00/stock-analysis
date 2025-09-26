@@ -218,21 +218,16 @@ export default {
                }
 
             case '/test':
-               const exchange = url.searchParams.get('exchange') || 'nasdaq';
-               const apiClient = new ApiClient({
-                  secApiKey: env.SEC_API_KEY,
+               const socket = await ApiClient.streamStockValue('AAPL', env.FINNHUB_API_KEY as string);
+               socket.addEventListener('message', (event) => {
+                  console.log(event.data);
+                  socket.close();
                });
-               return await apiClient.getSecApiExchange(exchange);
-
-            case '/index.html':
-               // Serve the HTML file from assets
-               const htmlRequest = new Request(`${url.origin}/static/index.html`);
-               const htmlResponse = await env.ASSETS.fetch(htmlRequest);
-               return new Response(htmlResponse.body, {
-                  headers: {
-                     'Content-Type': 'text/html',
-                     ...corsHeaders
-                  }
+               return new Response(JSON.stringify({
+                  message: 'Stock value streamed',
+               }), {
+                  status: 200,
+                  headers: { 'Content-Type': 'application/json', ...corsHeaders }
                });
 
 
