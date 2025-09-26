@@ -320,4 +320,43 @@ export abstract class StockAnalysisDB {
          throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
    }
+
+   static async deletePortfolioHolding(env: Env, holdingId: number): Promise<void> {
+      try {
+         await env.stock_analysis.prepare(`
+            DELETE FROM portfolio_holdings WHERE id = ?
+         `).bind(holdingId).run();
+      }
+      catch (error) {
+         console.error('Failed to delete portfolio holding:', error);
+         throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+   }
+
+   static async isUsersPortfolioHolding(env: Env, holdingId: number, userId: number): Promise<boolean> {
+      try {
+         const result = await env.stock_analysis.prepare(`
+            SELECT * FROM portfolio_holdings WHERE id = ? AND user_id = ?
+         `).bind(holdingId, userId).all();
+         return result.results.length > 0;
+      }
+      catch (error) {
+         console.error('Failed to check if users portfolio holding:', error);
+         throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+   }
+
+   static async isHoldingInPortfolio(env: Env, holdingId: number, portfolioId: number): Promise<boolean> {
+      try {
+         const result = await env.stock_analysis.prepare(`
+            SELECT * FROM portfolio_holdings WHERE id = ? AND portfolio_id = ?
+         `).bind(holdingId, portfolioId).all();
+         console.log(result.results);
+         return result.results.length > 0;
+      }
+      catch (error) {
+         console.error('Failed to check if holding is in portfolio:', error);
+         throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+   }
 }

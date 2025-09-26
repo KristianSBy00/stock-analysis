@@ -112,7 +112,7 @@ export default {
             // '/api/portfolios/{portfolioId}/'
             case path.match(/^\/api\/portfolios\/\d+\//) ? path : 'no-match':
                // Handle portfolio-specific routes with dynamic ID
-               if (path.includes('/holdings')) {
+               if (path.match(/^\/api\/portfolios\/\d+\/holdings\/\d+\//) ? path : 'no-match') {
                   if (method === 'GET') {
                      return await handleGetPortfolioHoldings(request, env);
                   } else if (method === 'POST') {
@@ -120,19 +120,11 @@ export default {
                   } else if (method === 'PUT') {
                      return await handleUpdatePortfolioHolding(request, env);
                   } else if (method === 'DELETE') {
+                     console.log('Removing stock from portfolio');
                      return await handleRemoveStockFromPortfolio(request, env);
                   }
-               } else if (path.includes('/transactions')) {
-                  if (method === 'GET') {
-                     return await handleGetPortfolioTransactions(request, env);
-                  } else if (method === 'POST') {
-                     return await handleAddPortfolioTransaction(request, env);
-                  }
-               } else if (path.includes('/summary')) {
-                  if (method === 'GET') {
-                     return await handleGetPortfolioSummary(request, env);
-                  }
-               } else {
+               }
+               else {
                   // Handle basic portfolio CRUD operations
                   if (method === 'GET') {
                      return await handleGetPortfolio(request, env);
@@ -142,7 +134,8 @@ export default {
                      return await handleDeletePortfolio(request, env);
                   }
                }
-               break;
+
+
             // ============================================================================
             // Public API Routes
             // ============================================================================
@@ -1462,10 +1455,10 @@ async function handleRemoveStockFromPortfolio(request: Request, env: Env): Promi
 
    try {
       const url = new URL(request.url);
-      const portfolioId = url.pathname.split('/')[3];
-      const symbol = url.searchParams.get('symbol');
+      const portfolioId = parseInt(url.pathname.split('/')[3]);
+      console.log(portfolioId);
 
-      if (!portfolioId || !symbol) {
+      if (!portfolioId) {
          return new Response(JSON.stringify({
             success: false,
             message: 'Portfolio ID and symbol are required'
@@ -1476,12 +1469,11 @@ async function handleRemoveStockFromPortfolio(request: Request, env: Env): Promi
       }
 
       // Verify portfolio belongs to user
-      const portfolioResult = await env.stock_analysis.prepare(`
-         SELECT id FROM user_portfolios
-         WHERE id = ? AND user_id = ?
-      `).bind(portfolioId, auth.user.id).first();
+      const isUsersPortfolio = await StockAnalysisDB.isUsersPortfolio(env, portfolioId, auth.user.id);
 
-      if (!portfolioResult) {
+      console.log(isUsersPortfolio);
+
+      if (!isUsersPortfolio) {
          return new Response(JSON.stringify({
             success: false,
             message: 'Portfolio not found'
@@ -1490,14 +1482,25 @@ async function handleRemoveStockFromPortfolio(request: Request, env: Env): Promi
             headers: { 'Content-Type': 'application/json', ...corsHeaders }
          });
       }
+      const holdingId = parseInt(url.pathname.split('/')[5]);
+      const isHoldingInPortfolio = await StockAnalysisDB.isHoldingInPortfolio(env, holdingId, portfolioId);
+
+      console.log(isHoldingInPortfolio);
+
+      if (!isHoldingInPortfolio) {
+         return new Response(JSON.stringify({
+            success: false,
+            message: 'Holding not found in portfolio'
+         }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
 
       // Remove holding
-      const result = await env.stock_analysis.prepare(`
-         DELETE FROM portfolio_holdings
-         WHERE portfolio_id = ? AND symbol = ?
-      `).bind(portfolioId, symbol).run();
-
-      if (!result.success) {
+      try {
+         await StockAnalysisDB.deletePortfolioHolding(env, holdingId);
+      } catch (error) {
          return new Response(JSON.stringify({
             success: false,
             message: 'Failed to remove stock from portfolio'

@@ -1,6 +1,10 @@
 window.onload = async function () {
    const data = await getPortfolioHoldings();
 
+   const searchParams = new URLSearchParams(window.location.search);
+   const portfolioId = searchParams.get('id');
+   console.log(portfolioId);
+
    var out = '<table class="table table-striped">';
    out += '<thead>';
    out += '<tr>';
@@ -42,4 +46,18 @@ async function getPortfolioHoldings() {
    console.log(data);
 
    return data;
+}
+
+
+async function deleteHolding(id) {
+   const token = localStorage.getItem('authToken');
+   const searchParams = new URLSearchParams(window.location.search);
+   const portfolioId = searchParams.get('id');
+   const response = await fetch(`/api/portfolios/${portfolioId}/holdings/${id}`, {
+      method: 'DELETE',
+      headers: {
+         'Authorization': `Bearer ${token}`,
+         'Content-Type': 'application/json',
+      }
+   });
 }
