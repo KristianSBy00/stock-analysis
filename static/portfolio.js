@@ -1,6 +1,28 @@
 window.onload = async function () {
    const data = await getPortfolioHoldings();
-   document.getElementById('prtfolioTextId').innerHTML = 'Portfolio ' + JSON.stringify(data) + '!';
+
+   var out = '<table class="table table-striped">';
+   out += '<thead>';
+   out += '<tr>';
+   out += '<th scope="col">Symbol</th>';
+   out += '<th scope="col">Quantity</th>';
+   out += '<th scope="col">Value</th>';
+   out += '<th scope="col"></th>';
+   out += '</tr>';
+   out += '</thead>';
+   out += '<tbody>';
+   for (const holding of data.holdings) {
+      out += `<tr>`;
+      out += `<td>${holding.symbol}</td>`;
+      out += `<td>${holding.quantity}</td>`;
+      out += `<td>${holding.value}</td>`;
+      out += `<td><button class="btn btn-danger" onclick="deleteHolding(${holding.id})">Sell All</button></td>`;
+      out += '</tr>';
+   };
+   out += '</tbody>';
+   out += '</table>';
+   document.getElementById('portfolioHoldingsTableId').innerHTML = out;
+
 };
 
 async function getPortfolioHoldings() {

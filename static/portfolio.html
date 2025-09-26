@@ -9,11 +9,17 @@
    <body>
       <div class="container">
          <h1 id="prtfolioNameId">Unknown portfolio</h1>
-         <div class="input-group mb-3">
-            <div class="input-group-text">
-               <input class="form-check-input mt-0" type="checkbox" value="" aria-label="Checkbox for following text input">
-            </div>
-            <input type="text" class="form-control" aria-label="Text input with checkbox">
+         <div class="input-group mb-3" id="portfolioHoldingsTableId">
+            <table class="table table-striped">
+               <thead>
+                  <tr>
+                     <th scope="col">Symbol</th>
+                     <th scope="col">Quantity</th>
+                     <th scope="col">Value</th>
+                     <th scope="col">Handle</th>
+                  </tr>
+               </thead>
+            </table>
          </div>
       </div>
       <script src="portfolio.js"></script>
