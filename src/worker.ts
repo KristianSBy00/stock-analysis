@@ -8,11 +8,17 @@ import { Resend } from 'resend';
 import { StockAnalysisDB } from './stockAnalasysDB';
 import { Env, LoginRequest, RegisterRequest, UserPortfolio, Portfolio } from './types';
 import { AuthMiddleware } from './authMiddleware';
-
+import { StockValueManager } from './stockValueManager';
 declare type ExecutionContext = any;
 declare type ScheduledController = any;
 
-
+declare global {
+   class WebSocketPair {
+      constructor();
+      0: WebSocket;
+      1: WebSocket;
+   }
+}
 
 // CORS headers
 const corsHeaders = {
@@ -20,6 +26,8 @@ const corsHeaders = {
    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
+
+let stockValueManager: StockValueManager | null = null;
 
 export default {
    async scheduled(
@@ -139,6 +147,43 @@ export default {
             // ============================================================================
             // Public API Routes
             // ============================================================================
+
+            case '/ws/stock-values':
+               console.log("stock-values");
+               if (method === 'GET') {
+                  // Check if this is a WebSocket upgrade request
+                  const upgradeHeader = request.headers.get('Upgrade');
+                  console.info(request.headers);
+                  if (upgradeHeader !== 'websocket') {
+                     return new Response('Expected Upgrade: websocket', { status: 426 });
+                  }
+
+                  // Create WebSocket pair
+                  const webSocketPair = new WebSocketPair();
+                  const [client, server] = Object.values(webSocketPair);
+
+                  // Initialize stock value manager if needed
+                  if (!stockValueManager) {
+                     stockValueManager = new StockValueManager(env.FINNHUB_API_KEY as string);
+                  }
+
+                  // Add the server-side WebSocket to the manager
+                  stockValueManager.addListener(client, ["BINANCE:BTCUSDT"]);
+
+                  // Accept the WebSocket connection
+                  server.accept();
+
+
+                  // Return the client-side WebSocket to the browser
+                  return new Response(null, {
+                     status: 101,
+                     headers: {
+                        'Upgrade': 'websocket',
+                        'Connection': 'Upgrade',
+                     },
+                  });
+               }
+               break;
 
             case '/send_email':
                console.log(env.MY_GMAIL_ADDRESS as string);
