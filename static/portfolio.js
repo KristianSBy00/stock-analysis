@@ -6,7 +6,7 @@ window.onload = async function () {
 async function getPortfolioHoldings() {
    const token = localStorage.getItem('authToken');
    const searchParams = new URLSearchParams(window.location.search);
-   const portfolioId = searchParams.get('portfolio-id');
+   const portfolioId = searchParams.get('id');
    console.log(portfolioId);
    const response = await fetch(`/api/portfolios/${portfolioId}/holdings`, {
       method: 'GET',
