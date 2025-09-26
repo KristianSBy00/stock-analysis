@@ -6,7 +6,7 @@
 import { ApiClient, ApiProvider } from './apiClient';
 import { Resend } from 'resend';
 import { StockAnalysisDB } from './stockAnalasysDB';
-import { Env, LoginRequest, RegisterRequest } from './types';
+import { Env, LoginRequest, RegisterRequest, UserPortfolio, Portfolio } from './types';
 import { AuthMiddleware } from './authMiddleware';
 
 declare type ExecutionContext = any;
@@ -103,7 +103,7 @@ export default {
 
             case '/api/portfolios':
                if (method === 'GET') {
-                  return await handleGetPortfolios(request, env);
+                  return await handleGetUserPortfolios(request, env);
                } else if (method === 'POST') {
                   return await handleCreatePortfolio(request, env);
                }
@@ -940,7 +940,7 @@ async function handleVerifyToken(request: Request, env: Env): Promise<Response> 
 /**
  * Handle get user portfolios
  */
-async function handleGetPortfolios(request: Request, env: Env): Promise<Response> {
+async function handleGetUserPortfolios(request: Request, env: Env): Promise<Response> {
    const authMiddleware = new AuthMiddleware(env);
    const authResult = await authMiddleware.requireAuth(request);
 
@@ -952,15 +952,14 @@ async function handleGetPortfolios(request: Request, env: Env): Promise<Response
 
    try {
       // Get portfolios for the authenticated user
-      const result = await env.stock_analysis.prepare(`
-         SELECT * FROM user_portfolios
-         WHERE user_id = ?
-         ORDER BY created_at DESC
-      `).bind(auth.user.id).all();
+      const portfolios = await StockAnalysisDB.getPortfolios(env, auth.user.id);
+
+      console.log('Portfolios data:');
+      console.log(JSON.stringify(portfolios, null, 2));
 
       return new Response(JSON.stringify({
          success: true,
-         portfolios: result.results
+         portfolios: portfolios
       }), {
          status: 200,
          headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -1321,7 +1320,7 @@ async function handleAddStockToPortfolio(request: Request, env: Env): Promise<Re
          });
       }
 
-      if (!symbol || !quantity ) {
+      if (!symbol || !quantity) {
          return new Response(JSON.stringify({
             success: false,
             message: 'Symbol, quantity, price per share, and transaction date are required'

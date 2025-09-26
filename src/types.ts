@@ -200,6 +200,16 @@ export interface DividendData {
    currency: string;
 }
 
+export interface Portfolio {
+   id: number;
+   userId: number;
+   portfolioName: string;
+   description?: string;
+   createdAt: string;
+   updatedAt: string;
+   holdings: PortfolioHolding[];
+}
+
 export interface YahooFinanceDividendResponse {
    symbol: string;
    name: string;

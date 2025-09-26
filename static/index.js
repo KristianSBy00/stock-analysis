@@ -118,3 +118,17 @@ async function getStockValue(stockTicker) {
    const data = await response.json();
    return data.chart.result[0].meta.regularMarketPrice;
 }
+
+async function getPortfolios(){
+   const token = localStorage.getItem('authToken');
+   const response = await fetch(`/api/portfolios`, {
+      method: 'GET',
+      headers: {
+         'Authorization': `Bearer ${token}`,
+         'Content-Type': 'application/json',
+      }
+   });
+
+   const data = await response.json();
+   console.log(data);
+}

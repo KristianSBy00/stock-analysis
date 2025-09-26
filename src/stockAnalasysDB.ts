@@ -3,7 +3,7 @@
  * Handles storage and retrieval of insider transactions and other stock data
  */
 
-import { InsiderTransaction, Env, PortfolioHolding, User } from './types';
+import { InsiderTransaction, Env, PortfolioHolding, User, Portfolio } from './types';
 
 export abstract class StockAnalysisDB {
    /**
@@ -254,6 +254,27 @@ export abstract class StockAnalysisDB {
       }
       catch (error) {
          console.error('Failed to retrieve all insider transactions:', error);
+         throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+   }
+
+   static async getPortfolios(env: Env, userId: number): Promise<Portfolio[]> {
+      try {
+         const result = await env.stock_analysis.prepare(`
+            SELECT * FROM user_portfolios WHERE user_id = ?
+         `).bind(userId).all();
+
+         var portfolios = result.results as Portfolio[];
+
+         for (const portfolio of portfolios) {
+            portfolio.holdings = await this.getPortfolioHoldings(env, portfolio.id);
+            console.log(`Portfolio ${portfolio.id} holdings:`, JSON.stringify(portfolio.holdings, null, 2));
+         }
+
+         return portfolios;
+      }
+      catch (error) {
+         console.error('Failed to retrieve portfolios:', error);
          throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
    }
