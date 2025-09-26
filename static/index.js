@@ -132,3 +132,8 @@ async function getPortfolios(){
    const data = await response.json();
    console.log(data);
 }
+
+
+function redirectToPortfolio(portfolioId) {
+   window.location.href = `/portfolio.html?portfolioId=${portfolioId}`;
+}

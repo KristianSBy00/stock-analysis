@@ -143,7 +143,6 @@ export default {
                   }
                }
                break;
-
             // ============================================================================
             // Public API Routes
             // ============================================================================
@@ -228,18 +227,6 @@ export default {
                }), {
                   status: 200,
                   headers: { 'Content-Type': 'application/json', ...corsHeaders }
-               });
-
-
-            case '/old.html':
-               // Serve the HTML file from assets
-               const oldHtmlRequest = new Request(`${url.origin}/static/old.html`);
-               const oldHtmlResponse = await env.ASSETS.fetch(oldHtmlRequest);
-               return new Response(oldHtmlResponse.body, {
-                  headers: {
-                     'Content-Type': 'text/html',
-                     ...corsHeaders
-                  }
                });
 
             case '/api/yahoo-stocks':
