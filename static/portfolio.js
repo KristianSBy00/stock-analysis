@@ -90,4 +90,5 @@ async function getStockValues() {
    websocket.onerror = (error) => {
       console.error('WebSocket error:', error);
    };
+   websocket.send(JSON.stringify({ 'type': 'subscribe-pr', 'symbol': 'BINANCE:BTCUSDT' }));
 }

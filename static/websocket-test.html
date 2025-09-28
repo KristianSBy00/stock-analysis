@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>WebSocket Proxy Test</title>
+   <style>
+      body {
+         font-family: Arial, sans-serif;
+         max-width: 800px;
+         margin: 0 auto;
+         padding: 20px;
+         background-color: #f5f5f5;
+      }
+
+      .container {
+         background: white;
+         padding: 20px;
+         border-radius: 8px;
+         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .status {
+         padding: 10px;
+         margin: 10px 0;
+         border-radius: 4px;
+         font-weight: bold;
+      }
+
+      .connected {
+         background-color: #d4edda;
+         color: #155724;
+      }
+
+      .disconnected {
+         background-color: #f8d7da;
+         color: #721c24;
+      }
+
+      .connecting {
+         background-color: #fff3cd;
+         color: #856404;
+      }
+
+      .messages {
+         height: 300px;
+         overflow-y: auto;
+         border: 1px solid #ddd;
+         padding: 10px;
+         background-color: #f8f9fa;
+         font-family: monospace;
+         font-size: 12px;
+      }
+
+      .message {
+         margin: 5px 0;
+         padding: 5px;
+         border-radius: 3px;
+      }
+
+      .message.sent {
+         background-color: #e3f2fd;
+      }
+
+      .message.received {
+         background-color: #f3e5f5;
+      }
+
+      .message.error {
+         background-color: #ffebee;
+         color: #c62828;
+      }
+
+      .controls {
+         margin: 20px 0;
+      }
+
+      button {
+         padding: 10px 20px;
+         margin: 5px;
+         border: none;
+         border-radius: 4px;
+         cursor: pointer;
+         font-size: 14px;
+      }
+
+      .connect-btn {
+         background-color: #28a745;
+         color: white;
+      }
+
+      .disconnect-btn {
+         background-color: #dc3545;
+         color: white;
+      }
+
+      .subscribe-btn {
+         background-color: #007bff;
+         color: white;
+      }
+
+      .unsubscribe-btn {
+         background-color: #6c757d;
+         color: white;
+      }
+
+      input[type="text"] {
+         padding: 8px;
+         margin: 5px;
+         border: 1px solid #ddd;
+         border-radius: 4px;
+         width: 200px;
+      }
+   </style>
+</head>
+
+<body>
+   <div class="container">
+      <h1>WebSocket Proxy Test - Finnhub Stock Data</h1>
+
+      <div id="status" class="status disconnected">Disconnected</div>
+
+      <div class="controls">
+         <button id="connectBtn" class="connect-btn">Connect</button>
+         <button id="disconnectBtn" class="disconnect-btn" disabled>Disconnect</button>
+         <br>
+         <input type="text" id="symbolInput" placeholder="Enter symbol (e.g., AAPL, BINANCE:BTCUSDT)"
+            value="BINANCE:BTCUSDT">
+         <button id="subscribeBtn" class="subscribe-btn" disabled>Subscribe</button>
+         <button id="unsubscribeBtn" class="unsubscribe-btn" disabled>Unsubscribe</button>
+      </div>
+
+      <h3>Messages:</h3>
+      <div id="messages" class="messages"></div>
+
+      <div class="controls">
+         <button id="clearBtn">Clear Messages</button>
+      </div>
+   </div>
+
+   <script>
+      let ws = null;
+      let isConnected = false;
+      let subscribedSymbols = new Set();
+
+      const statusEl = document.getElementById('status');
+      const messagesEl = document.getElementById('messages');
+      const connectBtn = document.getElementById('connectBtn');
+      const disconnectBtn = document.getElementById('disconnectBtn');
+      const subscribeBtn = document.getElementById('subscribeBtn');
+      const unsubscribeBtn = document.getElementById('unsubscribeBtn');
+      const symbolInput = document.getElementById('symbolInput');
+      const clearBtn = document.getElementById('clearBtn');
+
+      function updateStatus(status, className) {
+         statusEl.textContent = status;
+         statusEl.className = `status ${className}`;
+      }
+
+      function addMessage(content, type = 'received') {
+         const messageEl = document.createElement('div');
+         messageEl.className = `message ${type}`;
+         messageEl.textContent = `[${new Date().toLocaleTimeString()}] ${content}`;
+         messagesEl.appendChild(messageEl);
+         messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      function connect() {
+         if (ws) {
+            ws.close();
+         }
+
+         updateStatus('Connecting...', 'connecting');
+         connectBtn.disabled = true;
+
+         // Connect to our WebSocket proxy
+         ws = new WebSocket('ws://localhost:8787/ws/stock-values');
+
+         ws.onopen = function (event) {
+            isConnected = true;
+            updateStatus('Connected to WebSocket Proxy', 'connected');
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = false;
+            subscribeBtn.disabled = false;
+            unsubscribeBtn.disabled = false;
+            addMessage('Connected to WebSocket proxy', 'received');
+         };
+
+         ws.onmessage = function (event) {
+            try {
+               const data = JSON.parse(event.data);
+               addMessage(`Received: ${JSON.stringify(data, null, 2)}`, 'received');
+            } catch (e) {
+               addMessage(`Received: ${event.data}`, 'received');
+            }
+         };
+
+         ws.onclose = function (event) {
+            isConnected = false;
+            updateStatus(`Disconnected (Code: ${event.code})`, 'disconnected');
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            subscribeBtn.disabled = true;
+            unsubscribeBtn.disabled = true;
+            addMessage(`Connection closed: ${event.code} - ${event.reason}`, 'error');
+         };
+
+         ws.onerror = function (error) {
+            updateStatus('Connection Error', 'disconnected');
+            addMessage(`WebSocket error: ${error}`, 'error');
+         };
+      }
+
+      function disconnect() {
+         if (ws) {
+            ws.close();
+         }
+      }
+
+      function subscribe() {
+         const symbol = symbolInput.value.trim().toUpperCase();
+         if (!symbol) {
+            alert('Please enter a symbol');
+            return;
+         }
+
+         if (!isConnected) {
+            alert('Not connected to WebSocket');
+            return;
+         }
+
+         const message = {
+            type: 'subscribe',
+            symbol: symbol
+         };
+
+         ws.send(JSON.stringify(message));
+         subscribedSymbols.add(symbol);
+         addMessage(`Sent: ${JSON.stringify(message)}`, 'sent');
+      }
+
+      function unsubscribe() {
+         const symbol = symbolInput.value.trim().toUpperCase();
+         if (!symbol) {
+            alert('Please enter a symbol');
+            return;
+         }
+
+         if (!isConnected) {
+            alert('Not connected to WebSocket');
+            return;
+         }
+
+         const message = {
+            type: 'unsubscribe',
+            symbol: symbol
+         };
+
+         ws.send(JSON.stringify(message));
+         subscribedSymbols.delete(symbol);
+         addMessage(`Sent: ${JSON.stringify(message)}`, 'sent');
+      }
+
+      function clearMessages() {
+         messagesEl.innerHTML = '';
+      }
+
+      // Event listeners
+      connectBtn.addEventListener('click', connect);
+      disconnectBtn.addEventListener('click', disconnect);
+      subscribeBtn.addEventListener('click', subscribe);
+      unsubscribeBtn.addEventListener('click', unsubscribe);
+      clearBtn.addEventListener('click', clearMessages);
+
+      // Allow Enter key to subscribe
+      symbolInput.addEventListener('keypress', function (e) {
+         if (e.key === 'Enter') {
+            subscribe();
+         }
+      });
+
+      // Initialize
+      updateStatus('Ready to connect', 'disconnected');
+   </script>
+</body>
+
+</html>

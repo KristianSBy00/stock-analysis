@@ -164,40 +164,6 @@ export default {
             // ============================================================================
 
             case '/ws/stock-values':
-               console.log(`[WebSocket] Attempting WebSocket connection to /ws/stock-values`);
-               if (method === 'GET') {
-                  // Check if this is a WebSocket upgrade request
-                  const upgradeHeader = request.headers.get('Upgrade');
-                  const connectionHeader = request.headers.get('Connection');
-                  console.log(`[WebSocket] Upgrade header: ${upgradeHeader}`);
-                  console.log(`[WebSocket] Connection header: ${connectionHeader}`);
-                  const wsHeadersObj: Record<string, string> = {};
-                  request.headers.forEach((value, key) => {
-                     wsHeadersObj[key] = value;
-                  });
-                  console.log(`[WebSocket] All headers:`, wsHeadersObj);
-
-                  if (upgradeHeader !== 'websocket') {
-                     console.log(`[WebSocket] Rejected - Expected 'websocket' upgrade, got: ${upgradeHeader}`);
-                     return new Response('Expected Upgrade: websocket', { status: 426 });
-                  }
-
-                  // Create WebSocket pair
-                  console.log(`[WebSocket] Creating WebSocket pair`);
-                  const webSocketPair = new WebSocketPair();
-                  const [client, server] = Object.values(webSocketPair);
-
-                  // Handle the WebSocket session
-                  console.log(`[WebSocket] Starting WebSocket session`);
-                  handleWebSocketSession(server, env);
-
-                  // Return the client-side WebSocket to the browser
-                  console.log(`[WebSocket] Returning WebSocket response with status 101`);
-                  return new Response(null, {
-                     status: 101,
-                     webSocket: client,
-                  });
-               }
                break;
 
             case '/send_email':
@@ -479,6 +445,141 @@ async function handleWebSocketSession(websocket: WebSocket, env: Env) {
    });
 
    console.log(`[WebSocket Session] WebSocket session initialized successfully`);
+}
+
+/**
+ * Handle WebSocket proxy to Finnhub
+ */
+async function handleWebSocketProxy(request: Request, env: Env): Promise<Response> {
+   try {
+      console.log(`[WebSocket Proxy] Starting WebSocket proxy to Finnhub`);
+
+      // Check if FINNHUB_API_KEY is available
+      if (!env.FINNHUB_API_KEY) {
+         return new Response(JSON.stringify({
+            error: 'Missing configuration',
+            message: 'FINNHUB_API_KEY is not set. Add it via `wrangler secret put FINNHUB_API_KEY`.'
+         }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+         });
+      }
+
+      // Create WebSocket pair
+      const webSocketPair = new WebSocketPair();
+      const [client, server] = Object.values(webSocketPair);
+
+      // Accept the WebSocket connection
+      server.accept();
+
+      // Create connection to Finnhub WebSocket
+      const finnhubUrl = `wss://ws.finnhub.io?token=${env.FINNHUB_API_KEY}`;
+      console.log(`[WebSocket Proxy] Connecting to Finnhub: ${finnhubUrl}`);
+
+      const finnhubSocket = new WebSocket(finnhubUrl);
+
+      // Handle Finnhub WebSocket events
+      finnhubSocket.addEventListener('open', () => {
+         console.log('[WebSocket Proxy] Connected to Finnhub WebSocket');
+      });
+
+      finnhubSocket.addEventListener('message', (event) => {
+         console.log('[WebSocket Proxy] Message from Finnhub:', event.data);
+         try {
+            // Forward message to client
+            if (server.readyState === WebSocket.OPEN) {
+               server.send(event.data);
+            }
+         } catch (error) {
+            console.error('[WebSocket Proxy] Error forwarding message to client:', error);
+         }
+      });
+
+      finnhubSocket.addEventListener('error', (error) => {
+         console.error('[WebSocket Proxy] Finnhub WebSocket error:', error);
+         try {
+            if (server.readyState === WebSocket.OPEN) {
+               server.send(JSON.stringify({
+                  type: 'error',
+                  message: 'Connection to Finnhub failed'
+               }));
+            }
+         } catch (sendError) {
+            console.error('[WebSocket Proxy] Error sending error message to client:', sendError);
+         }
+      });
+
+      finnhubSocket.addEventListener('close', (event) => {
+         console.log('[WebSocket Proxy] Finnhub WebSocket closed:', event.code, event.reason);
+         try {
+            if (server.readyState === WebSocket.OPEN) {
+               server.send(JSON.stringify({
+                  type: 'close',
+                  code: event.code,
+                  reason: event.reason
+               }));
+            }
+         } catch (sendError) {
+            console.error('[WebSocket Proxy] Error sending close message to client:', sendError);
+         }
+      });
+
+      // Handle client WebSocket events
+      server.addEventListener('message', (event: MessageEvent) => {
+         console.log('[WebSocket Proxy] Message from client:', event.data);
+         try {
+            // Forward message to Finnhub
+            if (finnhubSocket.readyState === WebSocket.OPEN) {
+               finnhubSocket.send(event.data);
+            } else {
+               console.warn('[WebSocket Proxy] Finnhub WebSocket not open, cannot forward message');
+               server.send(JSON.stringify({
+                  type: 'error',
+                  message: 'Not connected to Finnhub'
+               }));
+            }
+         } catch (error) {
+            console.error('[WebSocket Proxy] Error forwarding message to Finnhub:', error);
+         }
+      });
+
+      server.addEventListener('close', () => {
+         console.log('[WebSocket Proxy] Client WebSocket closed');
+         try {
+            if (finnhubSocket.readyState === WebSocket.OPEN) {
+               finnhubSocket.close();
+            }
+         } catch (error) {
+            console.error('[WebSocket Proxy] Error closing Finnhub WebSocket:', error);
+         }
+      });
+
+      server.addEventListener('error', (error: Event) => {
+         console.error('[WebSocket Proxy] Client WebSocket error:', error);
+      });
+
+      // Return the WebSocket response
+      return new Response(null, {
+         status: 101,
+         webSocket: client,
+         headers: {
+            'Upgrade': 'websocket',
+            'Connection': 'Upgrade',
+            'Sec-WebSocket-Protocol': 'websocket',
+            ...corsHeaders
+         }
+      });
+
+   } catch (error) {
+      console.error('[WebSocket Proxy] Error creating WebSocket proxy:', error);
+      return new Response(JSON.stringify({
+         error: 'WebSocket proxy failed',
+         message: error instanceof Error ? error.message : 'Unknown error'
+      }), {
+         status: 500,
+         headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+   }
 }
 
 /**
