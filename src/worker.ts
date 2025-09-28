@@ -269,21 +269,64 @@ export default {
                   });
                }
 
-            case '/test':
+            case '/123':
                console.log('=== TEST ENDPOINT HIT ===');
-               const socket = await ApiClient.streamStockValue('AAPL', env.FINNHUB_API_KEY as string);
-               socket.addEventListener('message', (event) => {
-                  console.log(event.data);
-                  socket.close();
-               });
+
+               try {
+                  // Test the Finnhub WebSocket connection
+                  console.log(`Creating WebSocket connection to Finnhub: wss://ws.finnhub.io?token=${env.FINNHUB_API_KEY}`);
+                  const socket = new WebSocket(`wss://ws.finnhub.io?token=${env.FINNHUB_API_KEY}`);
+
+                  socket.addEventListener('open', function (event) {
+                     console.log('Finnhub WebSocket connection opened');
+                     socket.send(JSON.stringify({ 'type': 'subscribe-pr', 'symbol': 'BINANCE:BTCUSDT' }));
+                  });
+
+                  socket.addEventListener('message', function (event) {
+                     console.log('Message from Finnhub server:', event.data);
+                  });
+
+                  socket.addEventListener('error', function (event) {
+                     console.error('Finnhub WebSocket error:', event);
+                  });
+
+                  socket.addEventListener('close', function (event) {
+                     console.log('Finnhub WebSocket connection closed');
+                  });
+
+                  return new Response(JSON.stringify({
+                     success: true,
+                     message: 'Finnhub WebSocket connection initiated (check server logs)',
+                     timestamp: new Date().toISOString()
+                  }), {
+                     status: 200,
+                     headers: { 'Content-Type': 'application/json', ...corsHeaders }
+                  });
+
+               } catch (error) {
+                  console.error('Failed to create WebSocket connection:', error);
+                  return new Response(JSON.stringify({
+                     success: false,
+                     message: 'Failed to create WebSocket connection',
+                     error: error instanceof Error ? error.message : 'Unknown error'
+                  }), {
+                     status: 500,
+                     headers: { 'Content-Type': 'application/json', ...corsHeaders }
+                  });
+               }
+
                return new Response(JSON.stringify({
-                  message: 'Stock value streamed',
+                  success: true,
+                  message: 'Normal test completed',
+                  timestamp: new Date().toISOString(),
+                  method: method,
+                  path: path
                }), {
                   status: 200,
                   headers: { 'Content-Type': 'application/json', ...corsHeaders }
                });
 
-            case '/test-logging':
+            case '/logging':
                console.log('=== TEST LOGGING ENDPOINT HIT ===');
                console.log('This is a test log message at:', new Date().toISOString());
                console.log('Request method:', method);

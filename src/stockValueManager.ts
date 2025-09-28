@@ -19,40 +19,34 @@ export class StockValueManager {
    private static instance: StockValueManager;
    private listeners: StockValueListener[] = [];
    private finnhubApiKey: string;
+   private serverSocket: WebSocket;
 
    public constructor(finnhubApiKey: string) {
       this.finnhubApiKey = finnhubApiKey;
       console.log("StockValueManager initialized");
+
+      this.serverSocket = new WebSocket('wss://ws.finnhub.io?token=' + this.finnhubApiKey);
+      this.serverSocket.addEventListener('open', function (event) {
+         console.log("Server WebSocket opened");
+      });
+      this.serverSocket.addEventListener('message', function (event) {
+         console.log("Server WebSocket message:", event.data);
+      });
+
+
+      this.serverSocket.addEventListener('error', function (event) {
+         console.error("Server WebSocket error:", event);
+      });
+
+      this.serverSocket.send(JSON.stringify({ 'type': 'subscribe-pr', 'symbol': 'BINANCE:BTCUSDT' }))
+
    }
 
    public addListener(ws: WebSocket, interests: string[]) {
-      const listener: StockValueListener = {
-         connection: ws,
-         stockValues: [],
-      };
-      this.listeners.push(listener);
-      console.log("added listener");
-      console.log(this.listeners);
-
-      // Set up client WebSocket event handlers
-      ws.addEventListener("close", () => {
-         console.log("Client WebSocket closed");
-         this.removeListener(ws);
-      });
-
-      ws.addEventListener("error", (error) => {
-         console.error("Client WebSocket error:", error);
-      });
-
-      // Send a welcome message
-      this.sendToClient(ws, {
-         type: "connected",
-         message: "Connected to stock value stream",
-         symbol: interests[0] || "BINANCE:BTCUSDT"
-      });
+      
 
       // Start sending mock data for testing
-      this.startMockDataStream(ws, interests[0] || "BINANCE:BTCUSDT");
+      //this.startMockDataStream(ws, interests[0]);
    }
 
    private removeListener(ws: WebSocket) {
