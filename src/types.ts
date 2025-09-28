@@ -24,6 +24,12 @@ declare global {
       success: boolean;
       meta: any;
    }
+
+   // Cloudflare Workers WebSocket types
+   interface WebSocketPair {
+      [0]: WebSocket;
+      [1]: WebSocket;
+   }
 }
 
 export interface InsiderTransaction {

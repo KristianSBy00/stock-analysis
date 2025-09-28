@@ -18,6 +18,10 @@ declare global {
       0: WebSocket;
       1: WebSocket;
    }
+
+   interface ResponseInit {
+      webSocket?: WebSocket;
+   }
 }
 
 // CORS headers
@@ -57,9 +61,20 @@ export default {
    },
 
    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+      // CRITICAL: This should ALWAYS log when the worker receives ANY request
+      console.log('🔥 WORKER FETCH CALLED - THIS SHOULD ALWAYS APPEAR 🔥');
+
       const url = new URL(request.url);
       const path = url.pathname;
       const method = request.method;
+
+      // Log all incoming connections
+      console.log(`[${new Date().toISOString()}] ${method} ${path} - Connection from ${request.headers.get('CF-Connecting-IP') || 'unknown IP'}`);
+      const headersObj: Record<string, string> = {};
+      request.headers.forEach((value, key) => {
+         headersObj[key] = value;
+      });
+      console.log(`Request headers:`, headersObj);
 
       try {
          // Handle CORS preflight
@@ -149,38 +164,38 @@ export default {
             // ============================================================================
 
             case '/ws/stock-values':
-               console.log("stock-values");
+               console.log(`[WebSocket] Attempting WebSocket connection to /ws/stock-values`);
                if (method === 'GET') {
                   // Check if this is a WebSocket upgrade request
                   const upgradeHeader = request.headers.get('Upgrade');
-                  console.info(request.headers);
+                  const connectionHeader = request.headers.get('Connection');
+                  console.log(`[WebSocket] Upgrade header: ${upgradeHeader}`);
+                  console.log(`[WebSocket] Connection header: ${connectionHeader}`);
+                  const wsHeadersObj: Record<string, string> = {};
+                  request.headers.forEach((value, key) => {
+                     wsHeadersObj[key] = value;
+                  });
+                  console.log(`[WebSocket] All headers:`, wsHeadersObj);
+
                   if (upgradeHeader !== 'websocket') {
+                     console.log(`[WebSocket] Rejected - Expected 'websocket' upgrade, got: ${upgradeHeader}`);
                      return new Response('Expected Upgrade: websocket', { status: 426 });
                   }
 
                   // Create WebSocket pair
+                  console.log(`[WebSocket] Creating WebSocket pair`);
                   const webSocketPair = new WebSocketPair();
                   const [client, server] = Object.values(webSocketPair);
 
-                  // Initialize stock value manager if needed
-                  if (!stockValueManager) {
-                     stockValueManager = new StockValueManager(env.FINNHUB_API_KEY as string);
-                  }
-
-                  // Add the server-side WebSocket to the manager
-                  stockValueManager.addListener(client, ["BINANCE:BTCUSDT"]);
-
-                  // Accept the WebSocket connection
-                  server.accept();
-
+                  // Handle the WebSocket session
+                  console.log(`[WebSocket] Starting WebSocket session`);
+                  handleWebSocketSession(server, env);
 
                   // Return the client-side WebSocket to the browser
+                  console.log(`[WebSocket] Returning WebSocket response with status 101`);
                   return new Response(null, {
                      status: 101,
-                     headers: {
-                        'Upgrade': 'websocket',
-                        'Connection': 'Upgrade',
-                     },
+                     webSocket: client,
                   });
                }
                break;
@@ -255,6 +270,7 @@ export default {
                }
 
             case '/test':
+               console.log('=== TEST ENDPOINT HIT ===');
                const socket = await ApiClient.streamStockValue('AAPL', env.FINNHUB_API_KEY as string);
                socket.addEventListener('message', (event) => {
                   console.log(event.data);
@@ -262,6 +278,24 @@ export default {
                });
                return new Response(JSON.stringify({
                   message: 'Stock value streamed',
+               }), {
+                  status: 200,
+                  headers: { 'Content-Type': 'application/json', ...corsHeaders }
+               });
+
+            case '/test-logging':
+               console.log('=== TEST LOGGING ENDPOINT HIT ===');
+               console.log('This is a test log message at:', new Date().toISOString());
+               console.log('Request method:', method);
+               console.log('Request path:', path);
+               console.log('Request URL:', request.url);
+
+               return new Response(JSON.stringify({
+                  success: true,
+                  message: 'Logging test completed',
+                  timestamp: new Date().toISOString(),
+                  method: method,
+                  path: path
                }), {
                   status: 200,
                   headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -370,6 +404,39 @@ export default {
       }
    }
 };
+
+/**
+ * Handle WebSocket session for stock values
+ */
+async function handleWebSocketSession(websocket: WebSocket, env: Env) {
+   console.log(`[WebSocket Session] Initializing WebSocket session`);
+
+   // Accept the WebSocket connection first
+   (websocket as any).accept();
+
+   // Initialize stock value manager if needed
+   if (!stockValueManager) {
+      console.log(`[WebSocket Session] Creating new StockValueManager`);
+      stockValueManager = new StockValueManager(env.FINNHUB_API_KEY as string);
+   } else {
+      console.log(`[WebSocket Session] Using existing StockValueManager`);
+   }
+
+   // Add the WebSocket to the manager
+   console.log(`[WebSocket Session] Adding WebSocket listener for BINANCE:BTCUSDT`);
+   stockValueManager.addListener(websocket, ["BINANCE:BTCUSDT"]);
+
+   // Handle WebSocket events
+   websocket.addEventListener("close", () => {
+      console.log("[WebSocket Session] WebSocket connection closed");
+   });
+
+   websocket.addEventListener("error", (error) => {
+      console.error("[WebSocket Session] WebSocket error:", error);
+   });
+
+   console.log(`[WebSocket Session] WebSocket session initialized successfully`);
+}
 
 /**
  * Get stock data from Yahoo Finance using ApiClient

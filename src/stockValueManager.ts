@@ -17,35 +17,12 @@ export enum StockValueEventType {
 
 export class StockValueManager {
    private static instance: StockValueManager;
-   private serverConnection: WebSocket | null = null;
    private listeners: StockValueListener[] = [];
+   private finnhubApiKey: string;
 
    public constructor(finnhubApiKey: string) {
-      this.serverConnection = new WebSocket(`wss://ws.finnhub.io?token=${finnhubApiKey}`);
-      console.log("connecting to finnhub");
-
-      this.serverConnection.onopen = () => {
-         console.log("connected to finnhub");
-      };
-
-      this.serverConnection.onmessage = (event) => {
-         console.log("Received from Finnhub:", event.data);
-
-         // Forward message to all connected clients
-         this.listeners.forEach(listener => {
-            if (listener.connection.readyState === WebSocket.OPEN) {
-               listener.connection.send(event.data);
-            }
-         });
-      };
-
-      this.serverConnection.onerror = (error) => {
-         console.error("Finnhub WebSocket error:", error);
-      };
-
-      this.serverConnection.onclose = () => {
-         console.log("Finnhub WebSocket connection closed");
-      };
+      this.finnhubApiKey = finnhubApiKey;
+      console.log("StockValueManager initialized");
    }
 
    public addListener(ws: WebSocket, interests: string[]) {
@@ -58,27 +35,65 @@ export class StockValueManager {
       console.log(this.listeners);
 
       // Set up client WebSocket event handlers
-      ws.onclose = () => {
+      ws.addEventListener("close", () => {
          console.log("Client WebSocket closed");
          this.removeListener(ws);
-      };
+      });
 
-      ws.onerror = (error) => {
+      ws.addEventListener("error", (error) => {
          console.error("Client WebSocket error:", error);
-      };
+      });
 
-      if (!this.serverConnection) {
-         return;
-      }
+      // Send a welcome message
+      this.sendToClient(ws, {
+         type: "connected",
+         message: "Connected to stock value stream",
+         symbol: interests[0] || "BINANCE:BTCUSDT"
+      });
 
-      // Subscribe to the first interest (you might want to handle multiple)
-      this.serverConnection.send(JSON.stringify({
-         type: "subscribe",
-         symbol: interests[0],
-      }));
+      // Start sending mock data for testing
+      this.startMockDataStream(ws, interests[0] || "BINANCE:BTCUSDT");
    }
 
    private removeListener(ws: WebSocket) {
       this.listeners = this.listeners.filter(listener => listener.connection !== ws);
+   }
+
+   private sendToClient(ws: WebSocket, data: any) {
+      try {
+         // Check if WebSocket is open and ready to send
+         if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(data));
+         } else {
+            console.log(`WebSocket not ready, state: ${ws.readyState}`);
+         }
+      } catch (error) {
+         console.error("Error sending data to client:", error);
+      }
+   }
+
+   private startMockDataStream(ws: WebSocket, symbol: string) {
+      // Send mock stock data every 5 seconds
+      const interval = setInterval(() => {
+         if (ws.readyState === WebSocket.OPEN) {
+            const mockData = {
+               type: "trade",
+               data: [{
+                  s: symbol,
+                  p: (Math.random() * 100000 + 50000).toFixed(2),
+                  v: Math.floor(Math.random() * 1000) + 1,
+                  t: Date.now()
+               }]
+            };
+            this.sendToClient(ws, mockData);
+         } else {
+            clearInterval(interval);
+         }
+      }, 5000);
+
+      // Clean up interval when WebSocket closes
+      ws.addEventListener("close", () => {
+         clearInterval(interval);
+      });
    }
 }
