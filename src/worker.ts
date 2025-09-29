@@ -312,8 +312,22 @@ export default {
 
             case '/api/yahoo-stocks':
                if (method === 'GET') {
-                  const symbol = url.searchParams.get('symbol') || 'AAPL';
-                  return await getYahooStockData(symbol, env);
+
+                  const rawSymbols = url.searchParams.get('symbols');
+
+                  if (rawSymbols) {
+                     const symbols = rawSymbols.split(',');
+                     return await getYahooStockData(symbols, env);
+                  }
+                  else {
+                     return new Response(JSON.stringify({
+                        error: 'No symbols provided',
+                        message: 'No symbols provided'
+                     }), {
+                        status: 400,
+                        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+                     });
+                  }
                }
                break;
 
@@ -585,7 +599,7 @@ async function handleWebSocketProxy(request: Request, env: Env): Promise<Respons
 /**
  * Get stock data from Yahoo Finance using ApiClient
  */
-async function getYahooStockData(symbol: string, env: Env): Promise<Response> {
+async function getYahooStockData(symbols: string[], env: Env): Promise<Response> {
    try {
       const apiClient = new ApiClient({
          finnhubApiKey: env.FINNHUB_API_KEY,
@@ -593,9 +607,14 @@ async function getYahooStockData(symbol: string, env: Env): Promise<Response> {
          secApiKey: env.SEC_API_KEY
       });
 
-      const stockData = await apiClient.getYahooFinanceQuote(symbol);
+      const allStockData = [];
 
-      return new Response(JSON.stringify(stockData), {
+      for (const symbol of symbols) {
+         const stockData = await apiClient.getYahooFinanceQuote(symbol);
+         allStockData.push(stockData);
+      }
+
+      return new Response(JSON.stringify(allStockData), {
          status: 200,
          headers: {
             'Content-Type': 'application/json',
@@ -603,8 +622,9 @@ async function getYahooStockData(symbol: string, env: Env): Promise<Response> {
          }
       });
 
+
    } catch (error) {
-      const errorResponse = ApiClient.createYahooFinanceErrorResponse(error, 'fetch quote', symbol);
+      const errorResponse = ApiClient.createYahooFinanceErrorResponse(error, 'fetch quote', symbols.join(','));
 
       return new Response(JSON.stringify(errorResponse), {
          status: errorResponse.status,

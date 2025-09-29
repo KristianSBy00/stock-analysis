@@ -2,7 +2,6 @@ var myTickers = [];
 
 window.onload = async function () {
    const data = await getPortfolioHoldings();
-   const stockValues = await getStockValues();
 
    const searchParams = new URLSearchParams(window.location.search);
    const portfolioId = searchParams.get('id');
@@ -20,6 +19,7 @@ window.onload = async function () {
    out += '<tbody>';
    for (const holding of data.holdings) {
       myTickers.push(holding.symbol);
+      console.log(holding.symbol);
       out += `<tr>`;
       out += `<td>${holding.symbol}</td>`;
       out += `<td>${holding.quantity}</td>`;
@@ -30,6 +30,7 @@ window.onload = async function () {
    out += '</tbody>';
    out += '</table>';
    document.getElementById('portfolioHoldingsTableId').innerHTML = out;
+   console.log("asking for values");
    getStockValues()
 
    setInterval(function () {
@@ -72,13 +73,13 @@ async function deleteHolding(id) {
 }
 
 async function getStockValues() {
+   var url = '/api/yahoo-stocks?symbols=';
    for (const ticker of myTickers) {
-      const data = await getStockValueFromYahoo(ticker);
+      url += ticker + ',';
    }
-}
-
-async function getStockValueFromYahoo(ticker) {
-   const response = await fetch(`/api/yahoo-stocks?symbol=${ticker}`, {
+   url = url.slice(0, -1);
+   console.log(url);
+   const response = await fetch(url, {
       method: 'GET',
       headers: {
          'Content-Type': 'application/json',
