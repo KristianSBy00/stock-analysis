@@ -1,3 +1,5 @@
+var myTickers = [];
+
 window.onload = async function () {
    const data = await getPortfolioHoldings();
    const stockValues = await getStockValues();
@@ -17,6 +19,7 @@ window.onload = async function () {
    out += '</thead>';
    out += '<tbody>';
    for (const holding of data.holdings) {
+      myTickers.push(holding.symbol);
       out += `<tr>`;
       out += `<td>${holding.symbol}</td>`;
       out += `<td>${holding.quantity}</td>`;
@@ -27,6 +30,11 @@ window.onload = async function () {
    out += '</tbody>';
    out += '</table>';
    document.getElementById('portfolioHoldingsTableId').innerHTML = out;
+   getStockValues()
+
+   setInterval(function () {
+      getStockValues();
+   }, 5000);
 
 };
 
@@ -64,31 +72,19 @@ async function deleteHolding(id) {
 }
 
 async function getStockValues() {
-   const token = localStorage.getItem('authToken');
-   // Use relative URL or your deployed domain
-   const wsUri = window.location.protocol === 'https:'
-      ? `wss://${window.location.host}/ws/stock-values`
-      : `ws://${window.location.host}/ws/stock-values`;
+   for (const ticker of myTickers) {
+      const data = await getStockValueFromYahoo(ticker);
+   }
+}
 
-   const websocket = new WebSocket(wsUri);
-   websocket.onmessage = (event) => {
-      console.log('Received stock data:', event.data);
-      // Parse and handle the stock data here
-      try {
-         const data = JSON.parse(event.data);
-         console.log('Parsed stock data:', data);
-      } catch (e) {
-         console.log('Raw message:', event.data);
+async function getStockValueFromYahoo(ticker) {
+   const response = await fetch(`/api/yahoo-stocks?symbol=${ticker}`, {
+      method: 'GET',
+      headers: {
+         'Content-Type': 'application/json',
       }
-   };
-   websocket.onopen = () => {
-      console.log('WebSocket connection opened');
-   };
-   websocket.onclose = () => {
-      console.log('WebSocket connection closed');
-   };
-   websocket.onerror = (error) => {
-      console.error('WebSocket error:', error);
-   };
-   websocket.send(JSON.stringify({ 'type': 'subscribe-pr', 'symbol': 'BINANCE:BTCUSDT' }));
+   });
+   const data = await response.json();
+   console.log(data);
+   return data;
 }
