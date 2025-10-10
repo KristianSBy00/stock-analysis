@@ -163,7 +163,25 @@ export default {
             // Public API Routes
             // ============================================================================
 
-            case '/ws/stock-values':
+            case '/ws/stock-prices':
+               if (method === 'GET') {
+                  // Create WebSocket pair
+                  const webSocketPair = new WebSocketPair();
+                  const [client, server] = Object.values(webSocketPair);
+                  await handleWebSocketSession(client, env);
+
+                  // Return the WebSocket response
+                  return new Response(null, {
+                     status: 101,
+                     webSocket: client,
+                     headers: {
+                        'Upgrade': 'websocket',
+                        'Connection': 'Upgrade',
+                        'Sec-WebSocket-Protocol': 'websocket',
+                        ...corsHeaders
+                     }
+                  });
+               }
                break;
 
             case '/send_email':
@@ -440,7 +458,7 @@ async function handleWebSocketSession(websocket: WebSocket, env: Env) {
    // Initialize stock value manager if needed
    if (!stockValueManager) {
       console.log(`[WebSocket Session] Creating new StockValueManager`);
-      stockValueManager = new StockValueManager(env.FINNHUB_API_KEY as string);
+      stockValueManager = new StockValueManager();
    } else {
       console.log(`[WebSocket Session] Using existing StockValueManager`);
    }
@@ -452,10 +470,17 @@ async function handleWebSocketSession(websocket: WebSocket, env: Env) {
    // Handle WebSocket events
    websocket.addEventListener("close", () => {
       console.log("[WebSocket Session] WebSocket connection closed");
+      stockValueManager?.removeListener(websocket);
    });
 
    websocket.addEventListener("error", (error) => {
       console.error("[WebSocket Session] WebSocket error:", error);
+      stockValueManager?.removeListener(websocket);
+   });
+
+   websocket.addEventListener("message", (event) => {
+      console.log("[WebSocket Session] Message from client:", event.data);
+      stockValueManager?.addInterest(websocket, event.data);
    });
 
    console.log(`[WebSocket Session] WebSocket session initialized successfully`);

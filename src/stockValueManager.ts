@@ -1,7 +1,10 @@
+import { ApiClient } from './apiClient';
+
+import { YahooFinanceQuote } from './types';
 
 interface StockValue {
    symbol: string;
-   value: number;
+   price: number;
 }
 
 
@@ -11,16 +14,18 @@ export enum StockValueEventType {
    STOCK_VALUE_CHANGED
 }
 
+interface StockValueListener {
+   ws: WebSocket;
+   interests: string[];
+}
+
 export class StockValueManager {
    private static instance: StockValueManager;
-   private finnhubApiKey: string;
+   private listeners: StockValueListener[] = [];
+   private apiClient: ApiClient;
 
-   private listeners: Map<WebSocket, string[]> = new Map();
-   private stocksToTrack: string[] = [];
-
-   public constructor(finnhubApiKey: string) {
-      this.finnhubApiKey = finnhubApiKey;
-      console.log("StockValueManager initialized");
+   public constructor() {
+      this.apiClient = new ApiClient({});
    }
 
    public async start(interval: number){
@@ -28,20 +33,52 @@ export class StockValueManager {
       setInterval(this.uppdateStockValues.bind(this), interval);
    }
 
-   private uppdateStockValues(){
-      const stocks = new Map<string, number>();
+   private async uppdateStockValues(){
+      const stocks: StockValue[] = [];
 
-      this.listeners.forEach((ws, interests) => {
+      let out: any[];
 
-         let out = {};
-      });
+      for (const listener of this.listeners) {
+
+         out = [];
+
+         for (const interest of listener.interests) {
+
+            out.push({stock: interest, value: null});
+
+            for (const stock of stocks) {
+               if(stock.symbol === interest) {
+                  out[out.length - 1].value = stock.price;
+               }
+               else{
+                  const stockValue: YahooFinanceQuote = await this.apiClient.getQuote(interest) as YahooFinanceQuote;
+                  out[out.length - 1].price = stockValue.price;
+               }
+            }
+         }
+
+         this.sendToClient(listener.ws, out);
+      }
+      return stocks;
+   }
+
+   addInterest(ws: WebSocket, interests: string) {
+      for (const listener of this.listeners) {
+         if (listener.ws === ws) {
+            listener.interests.push(interests);
+            return;
+         }
+      }
    }
 
 
    public addListener(ws: WebSocket, interests: string[]) {
-      return;
+      this.listeners.push({ws, interests});
    }
 
+   public removeListener(ws: WebSocket) {
+      this.listeners = this.listeners.filter(listener => listener.ws !== ws);
+   }
 
 
    private sendToClient(ws: WebSocket, data: any) {
