@@ -50,11 +50,6 @@ export class ApiClient {
       this.apiNinjasApiKey = config.apiNinjasApiKey;
       this.secApiKey = config.secApiKey;
       this.timeoutMs = config.timeoutMs ?? 10000; // Default 10 seconds
-
-      // Validate that at least one API key is provided
-      if (!this.finnhubApiKey && !this.apiNinjasApiKey && !this.secApiKey) {
-         throw new Error('ApiClient requires at least one API key (finnhubApiKey or apiNinjasApiKey or secApiKey)');
-      }
    }
 
    private async makesSecApiRequest<T>(endpoint: string): Promise<T> {

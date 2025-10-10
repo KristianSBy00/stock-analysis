@@ -31,11 +31,15 @@ window.onload = async function () {
    out += '</table>';
    document.getElementById('portfolioHoldingsTableId').innerHTML = out;
    console.log("asking for values");
-   getStockValues()
 
-   setInterval(function () {
-      getStockValues();
-   }, 5000);
+
+   const wsUri = "/ws/stock-prices";
+   const websocket = new WebSocket(wsUri);
+
+   websocket.addEventListener("open", () => {
+      log("CONNECTED");
+      websocket.send({'type': 'subscribe', 'symbols': ['AAPL', 'MSFT']});
+   });
 
 };
 

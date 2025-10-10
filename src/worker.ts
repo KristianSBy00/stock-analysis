@@ -168,6 +168,7 @@ export default {
                   // Create WebSocket pair
                   const webSocketPair = new WebSocketPair();
                   const [client, server] = Object.values(webSocketPair);
+                  server.accept();
                   await handleWebSocketSession(client, env);
 
                   // Return the WebSocket response
@@ -463,9 +464,7 @@ async function handleWebSocketSession(websocket: WebSocket, env: Env) {
       console.log(`[WebSocket Session] Using existing StockValueManager`);
    }
 
-   // Add the WebSocket to the manager
-   console.log(`[WebSocket Session] Adding WebSocket listener for BINANCE:BTCUSDT`);
-   stockValueManager.addListener(websocket, ["BINANCE:BTCUSDT"]);
+   console.log(`[WebSocket Session] StockValueManager created: ${stockValueManager}`);
 
    // Handle WebSocket events
    websocket.addEventListener("close", () => {
