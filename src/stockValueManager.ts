@@ -28,55 +28,103 @@ export class StockValueManager {
       this.apiClient = new ApiClient({});
    }
 
-   public async start(interval: number){
-      // Start the stock value manager
-      setInterval(this.uppdateStockValues.bind(this), interval);
+   public start(interval: number) {
+      console.log(`[StockValueManager] Starting update interval: ${interval}ms`);
+      // Start the stock value manager update loop
+      setInterval(() => {
+         this.uppdateStockValues().catch(error => {
+            console.error('[StockValueManager] Error in update loop:', error);
+         });
+      }, interval);
    }
 
-   private async uppdateStockValues(){
-      const stocks: StockValue[] = [];
+   private async uppdateStockValues() {
+      console.log(`[StockValueManager] Updating stock values for ${this.listeners.length} listeners`);
 
-      let out: any[];
+      // Cache to avoid fetching the same stock multiple times
+      const stockCache: Map<string, StockValue> = new Map();
 
       for (const listener of this.listeners) {
+         if (listener.interests.length === 0) {
+            console.log(`[StockValueManager] Listener has no interests, skipping`);
+            continue;
+         }
 
-         out = [];
+         const updates: any[] = [];
 
-         for (const interest of listener.interests) {
+         for (const symbol of listener.interests) {
+            try {
+               let stockValue: StockValue;
 
-            out.push({stock: interest, value: null});
-
-            for (const stock of stocks) {
-               if(stock.symbol === interest) {
-                  out[out.length - 1].value = stock.price;
+               // Check cache first
+               if (stockCache.has(symbol)) {
+                  stockValue = stockCache.get(symbol)!;
+                  console.log(`[StockValueManager] Using cached value for ${symbol}: ${stockValue.price}`);
+               } else {
+                  // Fetch from API
+                  console.log(`[StockValueManager] Fetching quote for ${symbol}`);
+                  const quoteData: YahooFinanceQuote = await this.apiClient.getQuote(symbol) as YahooFinanceQuote;
+                  stockValue = {
+                     symbol: symbol,
+                     price: quoteData.price || 0
+                  };
+                  stockCache.set(symbol, stockValue);
                }
-               else{
-                  const stockValue: YahooFinanceQuote = await this.apiClient.getQuote(interest) as YahooFinanceQuote;
-                  out[out.length - 1].price = stockValue.price;
-               }
+
+               updates.push({
+                  type: 'price_update',
+                  symbol: stockValue.symbol,
+                  price: stockValue.price,
+                  timestamp: new Date().toISOString()
+               });
+            } catch (error) {
+               console.error(`[StockValueManager] Error fetching ${symbol}:`, error);
+               updates.push({
+                  type: 'error',
+                  symbol: symbol,
+                  message: 'Failed to fetch price',
+                  timestamp: new Date().toISOString()
+               });
             }
          }
 
-         this.sendToClient(listener.ws, out);
+         if (updates.length > 0) {
+            this.sendToClient(listener.ws, updates);
+         }
       }
-      return stocks;
    }
 
-   addInterest(ws: WebSocket, interests: string) {
+   addInterest(ws: WebSocket, symbol: string) {
+      console.log(`[StockValueManager] Adding interest for ${symbol}`);
       for (const listener of this.listeners) {
          if (listener.ws === ws) {
-            listener.interests.push(interests);
+            if (!listener.interests.includes(symbol)) {
+               listener.interests.push(symbol);
+               console.log(`[StockValueManager] Interest added. Total interests: ${listener.interests.length}`);
+            }
             return;
          }
       }
    }
 
+   public removeInterest(ws: WebSocket, symbol: string) {
+      console.log(`[StockValueManager] Removing interest for ${symbol}`);
+      for (const listener of this.listeners) {
+         if (listener.ws === ws) {
+            listener.interests = listener.interests.filter(interest => interest !== symbol);
+            console.log(`[StockValueManager] Interest removed. Total interests: ${listener.interests.length}`);
+            return;
+         }
+      }
+   }
 
    public addListener(ws: WebSocket, interests: string[]) {
-      this.listeners.push({ws, interests});
+      console.log(`[StockValueManager] Adding listener with ${interests.length} interests`);
+      this.listeners.push({ ws, interests });
    }
 
    public removeListener(ws: WebSocket) {
+      console.log(`[StockValueManager] Removing listener`);
       this.listeners = this.listeners.filter(listener => listener.ws !== ws);
    }
 

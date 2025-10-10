@@ -165,22 +165,26 @@ export default {
 
             case '/ws/stock-prices':
                if (method === 'GET') {
+                  // Upgrade request header check
+                  const upgradeHeader = request.headers.get('Upgrade');
+                  if (!upgradeHeader || upgradeHeader !== 'websocket') {
+                     return new Response('Expected Upgrade: websocket', { status: 426 });
+                  }
+
                   // Create WebSocket pair
                   const webSocketPair = new WebSocketPair();
                   const [client, server] = Object.values(webSocketPair);
-                  server.accept();
-                  await handleWebSocketSession(client, env);
 
-                  // Return the WebSocket response
+                  // Accept the server websocket
+                  server.accept();
+
+                  // Handle the server websocket in background
+                  handleWebSocketSession(server, env);
+
+                  // Return the client websocket to the browser
                   return new Response(null, {
                      status: 101,
                      webSocket: client,
-                     headers: {
-                        'Upgrade': 'websocket',
-                        'Connection': 'Upgrade',
-                        'Sec-WebSocket-Protocol': 'websocket',
-                        ...corsHeaders
-                     }
                   });
                }
                break;
@@ -450,25 +454,29 @@ export default {
 /**
  * Handle WebSocket session for stock values
  */
-async function handleWebSocketSession(websocket: WebSocket, env: Env) {
+function handleWebSocketSession(websocket: WebSocket, env: Env) {
    console.log(`[WebSocket Session] Initializing WebSocket session`);
 
-   // Accept the WebSocket connection first
-   (websocket as any).accept();
+   // WebSocket is already accepted before this function is called
 
    // Initialize stock value manager if needed
    if (!stockValueManager) {
       console.log(`[WebSocket Session] Creating new StockValueManager`);
       stockValueManager = new StockValueManager();
+      // Start the update loop (every 5 seconds) - don't await
+      stockValueManager.start(5000);
    } else {
       console.log(`[WebSocket Session] Using existing StockValueManager`);
    }
 
-   console.log(`[WebSocket Session] StockValueManager created: ${stockValueManager}`);
+   console.log(`[WebSocket Session] StockValueManager ready, adding listener`);
+
+   // Add this websocket as a listener
+   stockValueManager.addListener(websocket, []);
 
    // Handle WebSocket events
-   websocket.addEventListener("close", () => {
-      console.log("[WebSocket Session] WebSocket connection closed");
+   websocket.addEventListener("close", (evt) => {
+      console.log(`[WebSocket Session] WebSocket connection closed - Code: ${evt.code}, Reason: ${evt.reason}`);
       stockValueManager?.removeListener(websocket);
    });
 
@@ -477,9 +485,60 @@ async function handleWebSocketSession(websocket: WebSocket, env: Env) {
       stockValueManager?.removeListener(websocket);
    });
 
+   // Keep connection alive with periodic ping
+   const pingInterval = setInterval(() => {
+      try {
+         if (websocket.readyState === WebSocket.OPEN) {
+            websocket.send(JSON.stringify({ type: 'ping', timestamp: new Date().toISOString() }));
+         } else {
+            clearInterval(pingInterval);
+         }
+      } catch (error) {
+         console.error("[WebSocket Session] Error sending ping:", error);
+         clearInterval(pingInterval);
+      }
+   }, 30000); // Ping every 30 seconds
+
    websocket.addEventListener("message", (event) => {
       console.log("[WebSocket Session] Message from client:", event.data);
-      stockValueManager?.addInterest(websocket, event.data);
+      try {
+         const message = JSON.parse(event.data);
+         if (message.type === 'subscribe' && message.symbol) {
+            console.log(`[WebSocket Session] Subscribing to ${message.symbol}`);
+            stockValueManager?.addInterest(websocket, message.symbol);
+            websocket.send(JSON.stringify({
+               type: 'subscribed',
+               symbol: message.symbol,
+               timestamp: new Date().toISOString()
+            }));
+         } else if (message.type === 'unsubscribe' && message.symbol) {
+            console.log(`[WebSocket Session] Unsubscribing from ${message.symbol}`);
+            stockValueManager?.removeInterest(websocket, message.symbol);
+            websocket.send(JSON.stringify({
+               type: 'unsubscribed',
+               symbol: message.symbol,
+               timestamp: new Date().toISOString()
+            }));
+         } else {
+            console.log(`[WebSocket Session] Unknown message type: ${message.type}`);
+            websocket.send(JSON.stringify({
+               type: 'error',
+               message: `Unknown message type: ${message.type}`,
+               timestamp: new Date().toISOString()
+            }));
+         }
+      } catch (error) {
+         console.error("[WebSocket Session] Error parsing message:", error);
+         try {
+            websocket.send(JSON.stringify({
+               type: 'error',
+               message: 'Invalid message format',
+               timestamp: new Date().toISOString()
+            }));
+         } catch (sendError) {
+            console.error("[WebSocket Session] Error sending error message:", sendError);
+         }
+      }
    });
 
    console.log(`[WebSocket Session] WebSocket session initialized successfully`);

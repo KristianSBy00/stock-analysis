@@ -175,7 +175,7 @@
          connectBtn.disabled = true;
 
          // Connect to our WebSocket proxy
-         ws = new WebSocket('ws://localhost:8787/ws/stock-values');
+         ws = new WebSocket('ws://localhost:8787/ws/stock-prices');
 
          ws.onopen = function (event) {
             isConnected = true;
