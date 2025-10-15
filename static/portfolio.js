@@ -23,7 +23,7 @@ window.onload = async function () {
       out += `<tr>`;
       out += `<td>${holding.symbol}</td>`;
       out += `<td>${holding.quantity}</td>`;
-      out += `<td>${holding.value}</td>`;
+      out += `<td><div id="value-${holding.symbol}">${holding.value}</div></td>`;
       out += `<td><button class="btn btn-danger" onclick="deleteHolding(${holding.id})">Sell All</button></td>`;
       out += '</tr>';
    };
@@ -37,13 +37,22 @@ window.onload = async function () {
    const websocket = new WebSocket(wsUri);
 
    websocket.addEventListener("open", () => {
-      console.log("CONNECTED");
-      msg = {'type': 'subscribe', 'symbols': ['AAPL', 'MSFT']};
+      msg = {'type': 'subscribe', 'symbols': data.holdings.map(holding => holding.symbol)};
       websocket.send(JSON.stringify(msg));
+      console.log("CONNECTED");
    });
 
    websocket.addEventListener("message", (event) => {
       console.log(event.data);
+      const data = JSON.parse(event.data);
+
+      console.log(data);
+
+      for (const update of data) {
+         const symbol = update.symbol;
+         const prices = update.price;
+         document.getElementById(`value-${symbol}`).innerHTML = prices;
+      }
    });
 };
 
@@ -59,6 +68,7 @@ async function getPortfolioHoldings() {
          'Content-Type': 'application/json',
       }
    });
+
 
    const data = await response.json();
    console.log(data);
