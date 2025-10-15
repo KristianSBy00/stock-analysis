@@ -453,8 +453,7 @@ function handleWebSocketSession(websocket: WebSocket, env: Env) {
    if (!stockValueManager) {
       console.log(`[WebSocket Session] Creating new StockValueManager`);
       stockValueManager = new StockValueManager();
-      // Start the update loop (every 5 seconds) - don't await
-      stockValueManager.start(5000);
+      stockValueManager.setUpdateInterval(5000);
    } else {
       console.log(`[WebSocket Session] Using existing StockValueManager`);
    }
@@ -463,6 +462,30 @@ function handleWebSocketSession(websocket: WebSocket, env: Env) {
 
    // Add this websocket as a listener
    stockValueManager.addListener(websocket);
+
+   // Start a periodic update for this specific WebSocket connection
+   // This runs in the same execution context as the WebSocket
+   const updateInterval = setInterval(async () => {
+      try {
+         if (websocket.readyState === WebSocket.OPEN) {
+            await stockValueManager?.updateStockValues();
+         } else {
+            console.log(`[WebSocket Session] WebSocket closed, stopping updates`);
+            clearInterval(updateInterval);
+         }
+      } catch (error) {
+         console.error(`[WebSocket Session] Error in update cycle:`, error);
+      }
+   }, 5000);
+
+   // Clean up interval when WebSocket closes
+   websocket.addEventListener('close', () => {
+      clearInterval(updateInterval);
+   });
+
+   websocket.addEventListener('error', () => {
+      clearInterval(updateInterval);
+   });
 
    console.log(`[WebSocket Session] WebSocket session initialized successfully`);
 }

@@ -23,19 +23,20 @@ export class StockValueManager {
    private static instance: StockValueManager;
    private listeners: StockValueListener[] = [];
    private apiClient: ApiClient;
+   private updateInterval: number = 5000;
 
    public constructor() {
       this.apiClient = new ApiClient({});
    }
 
-   public start(interval: number) {
-      console.log(`[StockValueManager] Starting update interval: ${interval}ms`);
-      // Start the stock value manager update loop
-      setInterval(() => {
-         this.uppdateStockValues().catch(error => {
-            console.error('[StockValueManager] Error in update loop:', error);
-         });
-      }, interval);
+   public setUpdateInterval(interval: number) {
+      this.updateInterval = interval;
+      console.log(`[StockValueManager] Update interval set to: ${interval}ms`);
+   }
+
+   public async updateStockValues() {
+      console.log(`[StockValueManager] Updating stock values for ${this.listeners.length} listeners`);
+      return this.uppdateStockValues();
    }
 
    private async uppdateStockValues() {
@@ -215,9 +216,14 @@ export class StockValueManager {
             ws.send(JSON.stringify(data));
          } else {
             console.log(`WebSocket not ready, state: ${ws.readyState}`);
+            // Remove disconnected listeners
+            this.listeners = this.listeners.filter(listener => listener.ws !== ws);
          }
-      } catch (error) {
+      }
+      catch (error) {
          console.error("Error sending data to client:", error);
+         // Remove listeners that cause errors
+         this.listeners = this.listeners.filter(listener => listener.ws !== ws);
       }
    }
 }
