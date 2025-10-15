@@ -82,7 +82,15 @@ export interface ApiNinjasSp500Response {
    count?: number;
 }
 
-export interface ApiNinjasStockQuote {
+export interface Quote {
+   symbol?: string;
+   price?: number;
+   change?: number;
+   change_percent?: number;
+   volume?: number;
+}
+
+export interface ApiNinjasStockQuote extends Quote {
    symbol?: string;
    name?: string;
    price?: number;
@@ -121,7 +129,7 @@ export interface ApiNinjasCompanyProfile {
 // Finnhub Types
 // ============================================================================
 
-export interface FinnhubQuote {
+export interface FinnhubQuote extends Quote {
    c?: number; // current price
    d?: number; // change
    dp?: number; // percent change
@@ -167,7 +175,7 @@ export interface FinnhubInsiderTransactionsResponse {
 // Yahoo Finance Types
 // ============================================================================
 
-export interface YahooFinanceQuote {
+export interface YahooFinanceQuote extends Quote {
    symbol: string;
    name: string;
    price: number;

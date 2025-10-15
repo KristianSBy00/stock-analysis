@@ -147,16 +147,6 @@ export default {
                      return await handleRemoveStockFromPortfolio(request, env);
                   }
                }
-               else {
-                  // Handle basic portfolio CRUD operations
-                  if (method === 'GET') {
-                     return await handleGetPortfolio(request, env);
-                  } else if (method === 'PUT') {
-                     return await handleUpdatePortfolio(request, env);
-                  } else if (method === 'DELETE') {
-                     return await handleDeletePortfolio(request, env);
-                  }
-               }
 
 
             // ============================================================================
@@ -1542,6 +1532,13 @@ async function handleGetPortfolioHoldings(request: Request, env: Env): Promise<R
 
       // Get portfolio holdings
       const holdingsResult = await StockAnalysisDB.getPortfolioHoldings(env, portfolioId);
+
+
+      const apiClient = new ApiClient({});
+      for (const holding of holdingsResult) {
+         const quote = await apiClient.getQuote(holding.symbol);
+         holding.currentPrice = quote.price;
+      }
 
       return new Response(JSON.stringify({
          success: true,

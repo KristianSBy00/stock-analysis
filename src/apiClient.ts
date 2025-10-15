@@ -4,6 +4,7 @@
  */
 
 import {
+   Quote,
    FinnhubQuote,
    FinnhubNewsItem,
    FinnhubInsiderTransaction,
@@ -444,20 +445,6 @@ export class ApiClient {
       };
    }
 
-   /**
-    * Convert date string to Unix timestamp
-    */
-   private static dateToUnixTimestamp(dateString: string): number {
-      return Math.floor(new Date(dateString).getTime() / 1000);
-   }
-
-   /**
-    * Convert Unix timestamp to ISO date string
-    */
-   private static unixTimestampToDate(timestamp: number): string {
-      return new Date(timestamp * 1000).toISOString().split('T')[0];
-   }
-
    // ============================================================================
    // UNIFIED METHODS (with provider selection)
    // ============================================================================
@@ -465,7 +452,7 @@ export class ApiClient {
    /**
     * Get quote from specified provider (defaults to Finnhub if available, otherwise API Ninjas, then Yahoo Finance)
     */
-   async getQuote(symbol: string, provider?: ApiProvider): Promise<FinnhubQuote | ApiNinjasStockQuote | YahooFinanceQuote> {
+   async getQuote(symbol: string, provider?: ApiProvider): Promise<Quote> {
       if (provider === ApiProvider.YAHOO_FINANCE) {
          return this.getYahooFinanceQuote(symbol);
       } else if (provider === ApiProvider.API_NINJAS || (!this.finnhubApiKey && this.apiNinjasApiKey)) {

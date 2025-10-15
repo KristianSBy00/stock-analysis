@@ -23,7 +23,7 @@ window.onload = async function () {
       out += `<tr>`;
       out += `<td>${holding.symbol}</td>`;
       out += `<td>${holding.quantity}</td>`;
-      out += `<td><div id="value-${holding.symbol}">${holding.value}</div></td>`;
+      out += `<td><div id="value-${holding.symbol}">${holding.currentPrice}</div></td>`;
       out += `<td><button class="btn btn-danger" onclick="deleteHolding(${holding.id})">Sell All</button></td>`;
       out += '</tr>';
    };
