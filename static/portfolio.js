@@ -37,10 +37,14 @@ window.onload = async function () {
    const websocket = new WebSocket(wsUri);
 
    websocket.addEventListener("open", () => {
-      log("CONNECTED");
-      websocket.send({'type': 'subscribe', 'symbols': ['AAPL', 'MSFT']});
+      console.log("CONNECTED");
+      msg = {'type': 'subscribe', 'symbols': ['AAPL', 'MSFT']};
+      websocket.send(JSON.stringify(msg));
    });
 
+   websocket.addEventListener("message", (event) => {
+      console.log(event.data);
+   });
 };
 
 async function getPortfolioHoldings() {

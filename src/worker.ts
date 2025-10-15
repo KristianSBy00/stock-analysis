@@ -472,74 +472,7 @@ function handleWebSocketSession(websocket: WebSocket, env: Env) {
    console.log(`[WebSocket Session] StockValueManager ready, adding listener`);
 
    // Add this websocket as a listener
-   stockValueManager.addListener(websocket, []);
-
-   // Handle WebSocket events
-   websocket.addEventListener("close", (evt) => {
-      console.log(`[WebSocket Session] WebSocket connection closed - Code: ${evt.code}, Reason: ${evt.reason}`);
-      stockValueManager?.removeListener(websocket);
-   });
-
-   websocket.addEventListener("error", (error) => {
-      console.error("[WebSocket Session] WebSocket error:", error);
-      stockValueManager?.removeListener(websocket);
-   });
-
-   // Keep connection alive with periodic ping
-   const pingInterval = setInterval(() => {
-      try {
-         if (websocket.readyState === WebSocket.OPEN) {
-            websocket.send(JSON.stringify({ type: 'ping', timestamp: new Date().toISOString() }));
-         } else {
-            clearInterval(pingInterval);
-         }
-      } catch (error) {
-         console.error("[WebSocket Session] Error sending ping:", error);
-         clearInterval(pingInterval);
-      }
-   }, 30000); // Ping every 30 seconds
-
-   websocket.addEventListener("message", (event) => {
-      console.log("[WebSocket Session] Message from client:", event.data);
-      try {
-         const message = JSON.parse(event.data);
-         if (message.type === 'subscribe' && message.symbol) {
-            console.log(`[WebSocket Session] Subscribing to ${message.symbol}`);
-            stockValueManager?.addInterest(websocket, message.symbol);
-            websocket.send(JSON.stringify({
-               type: 'subscribed',
-               symbol: message.symbol,
-               timestamp: new Date().toISOString()
-            }));
-         } else if (message.type === 'unsubscribe' && message.symbol) {
-            console.log(`[WebSocket Session] Unsubscribing from ${message.symbol}`);
-            stockValueManager?.removeInterest(websocket, message.symbol);
-            websocket.send(JSON.stringify({
-               type: 'unsubscribed',
-               symbol: message.symbol,
-               timestamp: new Date().toISOString()
-            }));
-         } else {
-            console.log(`[WebSocket Session] Unknown message type: ${message.type}`);
-            websocket.send(JSON.stringify({
-               type: 'error',
-               message: `Unknown message type: ${message.type}`,
-               timestamp: new Date().toISOString()
-            }));
-         }
-      } catch (error) {
-         console.error("[WebSocket Session] Error parsing message:", error);
-         try {
-            websocket.send(JSON.stringify({
-               type: 'error',
-               message: 'Invalid message format',
-               timestamp: new Date().toISOString()
-            }));
-         } catch (sendError) {
-            console.error("[WebSocket Session] Error sending error message:", sendError);
-         }
-      }
-   });
+   stockValueManager.addListener(websocket);
 
    console.log(`[WebSocket Session] WebSocket session initialized successfully`);
 }

@@ -94,13 +94,18 @@ export class StockValueManager {
       }
    }
 
-   addInterest(ws: WebSocket, symbol: string) {
-      console.log(`[StockValueManager] Adding interest for ${symbol}`);
+   addInterests(ws: WebSocket, symbols: string[]) {
+      console.log(`[StockValueManager] Adding interest for ${symbols}`);
       for (const listener of this.listeners) {
          if (listener.ws === ws) {
-            if (!listener.interests.includes(symbol)) {
-               listener.interests.push(symbol);
-               console.log(`[StockValueManager] Interest added. Total interests: ${listener.interests.length}`);
+
+            console.log(symbols);
+
+            for (const symbol of symbols) {
+               if (!listener.interests.includes(symbol)) {
+                  listener.interests.push(symbol);
+                  console.log(`[StockValueManager] Interest added. Total interests: ${listener.interests.length}`);
+               }
             }
             return;
          }
@@ -118,9 +123,81 @@ export class StockValueManager {
       }
    }
 
-   public addListener(ws: WebSocket, interests: string[]) {
-      console.log(`[StockValueManager] Adding listener with ${interests.length} interests`);
-      this.listeners.push({ ws, interests });
+   public addListener(ws: WebSocket) {
+
+      // Handle WebSocket events
+      ws.addEventListener("close", (evt) => {
+         console.log(`[WebSocket Session] WebSocket connection closed - Code: ${evt.code}, Reason: ${evt.reason}`);
+         this.removeListener(ws);
+      });
+
+      ws.addEventListener("error", (error) => {
+         console.error("[WebSocket Session] WebSocket error:", error);
+         this.removeListener(ws);
+      });
+
+      // Keep connection alive with periodic ping
+      const pingInterval = setInterval(() => {
+         try {
+            if (ws.readyState === WebSocket.OPEN) {
+               ws.send(JSON.stringify({ type: 'ping', timestamp: new Date().toISOString() }));
+            }
+            else {
+               clearInterval(pingInterval);
+            }
+         }
+         catch (error) {
+            console.error("[WebSocket Session] Error sending ping:", error);
+            clearInterval(pingInterval);
+         }
+      }, 30000); // Ping every 30 seconds
+
+      ws.addEventListener("message", (event) => {
+         console.log("[WebSocket Session] Message from client:", event.data);
+         try {
+            const message = JSON.parse(event.data);
+            if (message.type === 'subscribe' && message.symbols) {
+               console.log(`[WebSocket Session] Subscribing to ${message.symbols}`);
+               this.addInterests(ws, message.symbols);
+               ws.send(JSON.stringify({
+                  type: 'subscribed',
+                  symbol: message.symbol,
+                  timestamp: new Date().toISOString()
+               }));
+            }
+            else if (message.type === 'unsubscribe' && message.symbols) {
+               console.log(`[WebSocket Session] Unsubscribing from ${message.symbols}`);
+               this.removeInterest(ws, message.symbols);
+               ws.send(JSON.stringify({
+                  type: 'unsubscribed',
+                  symbol: message.symbol,
+                  timestamp: new Date().toISOString()
+               }));
+            }
+            else {
+               console.log(`[WebSocket Session] Unknown message type: ${message.type}`);
+               ws.send(JSON.stringify({
+                  type: 'error',
+                  message: `Unknown message type: ${message.type}`,
+                  timestamp: new Date().toISOString()
+               }));
+            }
+         }
+         catch (error) {
+            console.error("[WebSocket Session] Error parsing message:", error);
+            try {
+               ws.send(JSON.stringify({
+                  type: 'error',
+                  message: 'Invalid message format',
+                  timestamp: new Date().toISOString()
+               }));
+            } catch (sendError) {
+               console.error("[WebSocket Session] Error sending error message:", sendError);
+            }
+         }
+      });
+
+      this.listeners.push({ ws, interests: [] });
    }
 
    public removeListener(ws: WebSocket) {
