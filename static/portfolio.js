@@ -48,12 +48,13 @@ window.onload = async function () {
 
       console.log(data);
 
-      for (const update of data) {
-         const symbol = update.symbol;
-         const prices = update.price;
-         document.getElementById(`value-${symbol}`).innerHTML = prices;
+      if (data.type === 'price_update') {
+         const symbol = data.symbol;
+         const price = data.price;
+         document.getElementById(`value-${symbol}`).innerHTML = price;
       }
    });
+
 };
 
 async function getPortfolioHoldings() {

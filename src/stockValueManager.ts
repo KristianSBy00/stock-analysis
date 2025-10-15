@@ -60,7 +60,8 @@ export class StockValueManager {
                if (stockCache.has(symbol)) {
                   stockValue = stockCache.get(symbol)!;
                   console.log(`[StockValueManager] Using cached value for ${symbol}: ${stockValue.price}`);
-               } else {
+               }
+               else {
                   // Fetch from API
                   console.log(`[StockValueManager] Fetching quote for ${symbol}`);
                   const quoteData: YahooFinanceQuote = await this.apiClient.getQuote(symbol) as YahooFinanceQuote;
@@ -77,7 +78,8 @@ export class StockValueManager {
                   price: stockValue.price,
                   timestamp: new Date().toISOString()
                });
-            } catch (error) {
+            }
+            catch (error) {
                console.error(`[StockValueManager] Error fetching ${symbol}:`, error);
                updates.push({
                   type: 'error',
@@ -88,8 +90,8 @@ export class StockValueManager {
             }
          }
 
-         if (updates.length > 0) {
-            this.sendToClient(listener.ws, updates);
+         for (const update of updates) {
+            this.sendToClient(listener.ws, update);
          }
       }
    }
